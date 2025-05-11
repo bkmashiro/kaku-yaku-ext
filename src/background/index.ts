@@ -154,67 +154,66 @@ Browser.contextMenus.onClicked.addListener(async (info, tab) => {
         func: (selectedText: string, tokensData: TokenData[] | null) => {
           // 将选中的文本添加不同颜色的背景
           function highlightTextWithTokens(text: string, tokens: TokenData[] | null) {
-            if (!tokens || tokens.length === 0) {
+            // 获取当前选中的范围
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) {
+              console.warn("无法获取用户选择范围");
+              return 0;
+            }
+            
+            try {
+              // 创建一个片段用于插入高亮内容
+              const range = selection.getRangeAt(0).cloneRange();
+              range.deleteContents();
+              
               // 如果没有分析结果，使用默认高亮
-              return highlightText(text, 'default');
-            }
-            
-            // 按照token高亮
-            let highlightCount = 0;
-            tokens.forEach(token => {
-              highlightCount += highlightText(token.surface, token.pos || 'default');
-            });
-            
-            return highlightCount;
-          }
-          
-          // 根据词性高亮特定文本
-          function highlightText(text: string, wordType: string) {
-            // 查找所有文本节点
-            function findTextNodes(element: Node): Text[] {
-              const nodes: Text[] = [];
-              
-              function traverse(node: Node) {
-                if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== "") {
-                  nodes.push(node as Text);
-                } else {
-                  for (let i = 0; i < node.childNodes.length; i++) {
-                    traverse(node.childNodes[i]);
-                  }
-                }
+              if (!tokens || tokens.length === 0) {
+                // 创建高亮元素
+                const span = document.createElement('span');
+                span.className = `kaku-yaku-highlight kaku-yaku-default`;
+                span.title = text;
+                span.textContent = text;
+                
+                // 插入元素
+                range.insertNode(span);
+                
+                // 清除选择状态
+                selection.removeAllRanges();
+                
+                return 1;
               }
               
-              traverse(element);
-              return nodes;
-            }
-            
-            // 高亮匹配的文本
-            const textNodes = findTextNodes(document.body);
-            let count = 0;
-            
-            for (const node of textNodes) {
-              const content = node.textContent || "";
-              if (content.includes(text)) {
-                try {
-                  const range = document.createRange();
-                  const startIndex = content.indexOf(text);
+              // 创建包含所有高亮token的文档片段
+              const fragment = document.createDocumentFragment();
+              
+              // 遍历所有tokens，分别创建高亮元素
+              tokens.forEach(token => {
+                const pos = token.pos || 'default';
+                const surface = token.surface;
+                
+                if (surface) {
+                  // 创建span元素
+                  const span = document.createElement('span');
+                  span.className = `kaku-yaku-highlight kaku-yaku-${pos}`;
+                  span.title = `${surface} (${pos})`;
+                  span.textContent = surface;
                   
-                  range.setStart(node, startIndex);
-                  range.setEnd(node, startIndex + text.length);
-                  
-                  const span = document.createElement("span");
-                  span.className = `kaku-yaku-highlight kaku-yaku-${wordType}`;
-                  span.title = `${text} (${wordType})`;
-                  
-                  range.surroundContents(span);
-                  count++;
-                } catch (e) {
-                  console.error("高亮文本时出错:", e);
+                  // 添加到文档片段
+                  fragment.appendChild(span);
                 }
-              }
+              });
+              
+              // 插入构建好的文档片段
+              range.insertNode(fragment);
+              
+              // 清除选择状态
+              selection.removeAllRanges();
+              
+              return tokens.length;
+            } catch (error) {
+              console.error("高亮文本时出错:", error);
+              return 0;
             }
-            
-            return count;
           }
           
           // 执行高亮并返回结果

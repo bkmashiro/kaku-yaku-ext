@@ -18,17 +18,6 @@ interface TokenData {
   dictionaryForm?: string;
 }
 
-const src = chrome.runtime.getURL("src/ui/content-script-iframe/index.html")
-
-const iframe = new DOMParser().parseFromString(
-  `<iframe class="crx-iframe ${name}" src="${src}" title="${name}"></iframe>`,
-  "text/html",
-).body.firstElementChild
-
-if (iframe) {
-  document.body?.append(iframe)
-}
-
 // 设置一个标记表示content script已加载
 if (!window.hasOwnProperty('kakuYakuLoaded')) {
   window.kakuYakuLoaded = true;
@@ -88,84 +77,88 @@ const highlightSelectedText = (selectedText: string, tokens?: TokenData[]) => {
   }
 };
 
-// 使用tokens高亮文本
+// 使用tokens高亮文本 - 只处理当前选中的文本
 const highlightTextWithTokens = (text: string, tokens: TokenData[]): number => {
   try {
-    let highlightCount = 0;
+    // 获取当前选中的范围
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      console.warn("无法获取用户选择范围");
+      return 0;
+    }
     
-    // 遍历所有tokens，分别高亮
+    // 创建一个片段用于插入高亮内容
+    const range = selection.getRangeAt(0).cloneRange();
+    range.deleteContents();
+    
+    // 创建包含所有高亮token的文档片段
+    const fragment = document.createDocumentFragment();
+    
+    // 遍历所有tokens，分别创建高亮元素
     tokens.forEach(token => {
       const normalizedPos = normalizePos(token.pos);
       const surface = token.surface;
       
       if (surface) {
-        console.info(`高亮 "${surface}" (${normalizedPos})`);
-        const count = highlightText(surface, normalizedPos);
-        highlightCount += count;
+        // 创建span元素
+        const span = document.createElement('span');
+        span.className = `kaku-yaku-highlight kaku-yaku-${normalizedPos}`;
+        span.title = `${surface} (${normalizedPos})`;
+        span.textContent = surface;
+        
+        // 添加到文档片段
+        fragment.appendChild(span);
+        console.info(`已创建 "${surface}" (${normalizedPos}) 的高亮元素`);
       }
     });
     
-    console.info(`成功高亮 ${highlightCount} 处语素`);
-    return highlightCount;
+    // 插入构建好的文档片段
+    range.insertNode(fragment);
+    console.info(`成功替换选中文本为高亮元素`);
+    
+    // 清除选择状态
+    selection.removeAllRanges();
+    
+    return tokens.length;
   } catch (error) {
     console.error("使用tokens高亮文本时出错:", error);
     return 0;
   }
 };
 
-// 根据词性高亮特定文本
+// 根据词性高亮文本 - 只处理当前选中的文本
 const highlightText = (text: string, wordType: string): number => {
-  // 查找所有文本节点
-  const textNodes = findTextNodes(document.body);
-  let count = 0;
-  
-  // 遍历所有文本节点，查找并高亮匹配的文本
-  for (const node of textNodes) {
-    const nodeText = node.textContent || "";
-    if (nodeText.includes(text)) {
-      try {
-        const range = document.createRange();
-        const startIndex = nodeText.indexOf(text);
-        
-        // 设置range开始和结束位置
-        range.setStart(node, startIndex);
-        range.setEnd(node, startIndex + text.length);
-        
-        // 创建一个span元素包裹选中的文本
-        const highlightSpan = document.createElement("span");
-        highlightSpan.className = `kaku-yaku-highlight kaku-yaku-${wordType}`;
-        highlightSpan.title = `${text} (${wordType})`;
-        
-        // 使用range将选中的文本替换为span元素
-        range.surroundContents(highlightSpan);
-        count++;
-      } catch (e) {
-        console.error(`高亮"${text}"时出错:`, e);
-      }
+  try {
+    // 获取当前选中的范围
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      console.warn("无法获取用户选择范围");
+      return 0;
     }
+    
+    // 克隆当前选择的范围
+    const range = selection.getRangeAt(0).cloneRange();
+    
+    // 创建高亮元素
+    const span = document.createElement('span');
+    span.className = `kaku-yaku-highlight kaku-yaku-${wordType}`;
+    span.title = `${text} (${wordType})`;
+    
+    // 替换选中内容
+    range.deleteContents();
+    span.textContent = text;
+    range.insertNode(span);
+    
+    // 清除选择状态
+    selection.removeAllRanges();
+    
+    console.info(`已高亮选中文本: "${text}" (${wordType})`);
+    return 1;
+  } catch (error) {
+    console.error(`高亮"${text}"时出错:`, error);
+    return 0;
   }
-  
-  return count;
 };
-
-// 查找页面中的所有文本节点
-function findTextNodes(element: Node): Text[] {
-  const textNodes: Text[] = []
-  
-  // 递归遍历DOM树
-  function traverse(node: Node) {
-    if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== "") {
-      textNodes.push(node as Text)
-    } else {
-      for (let i = 0; i < node.childNodes.length; i++) {
-        traverse(node.childNodes[i])
-      }
-    }
-  }
-  
-  traverse(element)
-  return textNodes
-}
 
 // 监听来自background脚本的消息
 Browser.runtime.onMessage.addListener((message: any) => {
