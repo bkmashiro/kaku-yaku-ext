@@ -10,6 +10,14 @@ declare global {
   }
 }
 
+// 定义Token接口
+interface TokenData {
+  surface: string;
+  pos: string;
+  reading?: string;
+  dictionaryForm?: string;
+}
+
 const src = chrome.runtime.getURL("src/ui/content-script-iframe/index.html")
 
 const iframe = new DOMParser().parseFromString(
@@ -44,42 +52,101 @@ const notifyReady = () => {
   }
 }
 
+// 统一词性格式，确保与CSS类名匹配
+const normalizePos = (pos: string): string => {
+  // 默认词性
+  if (!pos) return 'default';
+  
+  // 转换API返回的不同写法
+  switch (pos) {
+    case '接頭辞':
+      return '接頭詞';
+    case '接尾辞':
+      return '接尾辞';
+    default:
+      return pos;
+  }
+};
+
 // 高亮显示选中的文本
-const highlightSelectedText = (selectedText: string) => {
+const highlightSelectedText = (selectedText: string, tokens?: TokenData[]) => {
   try {
-    console.info("准备高亮文本:", selectedText)
+    console.info("准备高亮文本:", selectedText);
     
-    // 创建一个range用于查找文本
-    const textNodes = findTextNodes(document.body)
-    
-    // 遍历所有文本节点，查找并高亮匹配的文本
-    let highlightCount = 0
-    for (const node of textNodes) {
-      const nodeText = node.textContent || ""
-      if (nodeText.includes(selectedText)) {
-        const range = document.createRange()
-        const startIndex = nodeText.indexOf(selectedText)
-        
-        // 设置range开始和结束位置
-        range.setStart(node, startIndex)
-        range.setEnd(node, startIndex + selectedText.length)
-        
-        // 创建一个span元素包裹选中的文本
-        const highlightSpan = document.createElement("span")
-        highlightSpan.className = "kaku-yaku-highlight"
-        highlightSpan.title = "已解析文本"
-        
-        // 使用range将选中的文本替换为span元素
-        range.surroundContents(highlightSpan)
-        highlightCount++
-      }
+    // 如果提供了tokens数据，使用带词性的高亮
+    if (tokens && tokens.length > 0) {
+      console.info(`使用词性数据高亮 ${tokens.length} 个语素`);
+      return highlightTextWithTokens(selectedText, tokens);
     }
     
-    console.info(`已成功高亮 ${highlightCount} 处文本`)
+    // 否则使用普通高亮
+    console.info("使用普通高亮");
+    return highlightText(selectedText, 'default');
   } catch (error) {
-    console.error("高亮文本时出错:", error)
+    console.error("高亮文本时出错:", error);
+    return 0;
   }
-}
+};
+
+// 使用tokens高亮文本
+const highlightTextWithTokens = (text: string, tokens: TokenData[]): number => {
+  try {
+    let highlightCount = 0;
+    
+    // 遍历所有tokens，分别高亮
+    tokens.forEach(token => {
+      const normalizedPos = normalizePos(token.pos);
+      const surface = token.surface;
+      
+      if (surface) {
+        console.info(`高亮 "${surface}" (${normalizedPos})`);
+        const count = highlightText(surface, normalizedPos);
+        highlightCount += count;
+      }
+    });
+    
+    console.info(`成功高亮 ${highlightCount} 处语素`);
+    return highlightCount;
+  } catch (error) {
+    console.error("使用tokens高亮文本时出错:", error);
+    return 0;
+  }
+};
+
+// 根据词性高亮特定文本
+const highlightText = (text: string, wordType: string): number => {
+  // 查找所有文本节点
+  const textNodes = findTextNodes(document.body);
+  let count = 0;
+  
+  // 遍历所有文本节点，查找并高亮匹配的文本
+  for (const node of textNodes) {
+    const nodeText = node.textContent || "";
+    if (nodeText.includes(text)) {
+      try {
+        const range = document.createRange();
+        const startIndex = nodeText.indexOf(text);
+        
+        // 设置range开始和结束位置
+        range.setStart(node, startIndex);
+        range.setEnd(node, startIndex + text.length);
+        
+        // 创建一个span元素包裹选中的文本
+        const highlightSpan = document.createElement("span");
+        highlightSpan.className = `kaku-yaku-highlight kaku-yaku-${wordType}`;
+        highlightSpan.title = `${text} (${wordType})`;
+        
+        // 使用range将选中的文本替换为span元素
+        range.surroundContents(highlightSpan);
+        count++;
+      } catch (e) {
+        console.error(`高亮"${text}"时出错:`, e);
+      }
+    }
+  }
+  
+  return count;
+};
 
 // 查找页面中的所有文本节点
 function findTextNodes(element: Node): Text[] {
@@ -102,17 +169,27 @@ function findTextNodes(element: Node): Text[] {
 
 // 监听来自background脚本的消息
 Browser.runtime.onMessage.addListener((message: any) => {
-  console.info("收到消息:", message)
+  console.info("收到消息:", message);
   
-  if (message.action === "highlight-text" && message.text) {
-    highlightSelectedText(message.text)
+  if (message.action === "highlight-text") {
+    if (message.text) {
+      if (message.tokens) {
+        // 带有分析结果的高亮
+        console.info(`收到高亮请求，带有 ${message.tokens.length} 个语素数据`);
+        highlightSelectedText(message.text, message.tokens);
+      } else {
+        // 普通高亮
+        console.info("收到高亮请求，无语素数据");
+        highlightSelectedText(message.text);
+      }
+    }
   } else if (message.action === "ping") {
     // 回复ping以确认content script已加载
-    return Promise.resolve({ action: "pong" })
+    return Promise.resolve({ action: "pong" });
   }
   
-  return true
-})
+  return true;
+});
 
 // 在页面加载完成后通知background
 if (document.readyState === 'loading') {

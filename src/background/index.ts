@@ -23,6 +23,14 @@ interface PingResponse {
   action: string;
 }
 
+// 定义Token接口
+interface TokenData {
+  surface: string;
+  pos: string;
+  reading?: string;
+  dictionaryForm?: string;
+}
+
 // 跟踪已加载content script的标签页
 const contentScriptTabs = new Set<number>();
 
@@ -49,100 +57,6 @@ Browser.runtime.onMessage.addListener((
     contentScriptTabs.add(sender.tab.id);
   }
 });
-
-// 直接注入代码高亮选中文本
-async function injectHighlightScript(tabId: number, text: string): Promise<boolean> {
-  try {
-    console.info(`尝试直接注入高亮脚本到标签页 ${tabId}...`);
-    
-    // 注入CSS
-    await Browser.scripting.insertCSS({
-      target: { tabId },
-      css: `
-        .kaku-yaku-highlight {
-          background-color: rgba(255, 0, 0, 0.3);
-          border-radius: 2px;
-          padding: 1px 2px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-        
-        .kaku-yaku-highlight:hover {
-          background-color: rgba(255, 0, 0, 0.5);
-          box-shadow: 0 0 3px rgba(255, 0, 0, 0.5);
-        }
-      `
-    });
-    
-    // 注入高亮函数和执行代码
-    const results = await Browser.scripting.executeScript({
-      target: { tabId },
-      func: (selectedText: string) => {
-        // 将选中的文本添加红色背景
-        function highlightText(text: string) {
-          // 查找所有文本节点
-          function findTextNodes(element: Node): Text[] {
-            const nodes: Text[] = [];
-            
-            function traverse(node: Node) {
-              if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== "") {
-                nodes.push(node as Text);
-              } else {
-                for (let i = 0; i < node.childNodes.length; i++) {
-                  traverse(node.childNodes[i]);
-                }
-              }
-            }
-            
-            traverse(element);
-            return nodes;
-          }
-          
-          // 高亮匹配的文本
-          const textNodes = findTextNodes(document.body);
-          let count = 0;
-          
-          for (const node of textNodes) {
-            const content = node.textContent || "";
-            if (content.includes(text)) {
-              try {
-                const range = document.createRange();
-                const startIndex = content.indexOf(text);
-                
-                range.setStart(node, startIndex);
-                range.setEnd(node, startIndex + text.length);
-                
-                const span = document.createElement("span");
-                span.className = "kaku-yaku-highlight";
-                span.title = "已解析文本";
-                
-                range.surroundContents(span);
-                count++;
-              } catch (e) {
-                console.error("高亮文本时出错:", e);
-              }
-            }
-          }
-          
-          return count;
-        }
-        
-        // 执行高亮并返回结果
-        return highlightText(selectedText);
-      },
-      args: [text]
-    });
-    
-    // 检查执行结果
-    const highlightCount = results && results[0] && typeof results[0].result === 'number' ? results[0].result : 0;
-    console.info(`直接注入高亮了 ${highlightCount} 处文本`);
-    
-    return highlightCount > 0;
-  } catch (error) {
-    console.error(`直接注入高亮脚本失败:`, error);
-    return false;
-  }
-}
 
 // 检查content script是否已准备好
 async function isContentScriptReady(tabId: number): Promise<boolean> {
@@ -175,17 +89,22 @@ Browser.contextMenus.onClicked.addListener(async (info, tab) => {
       console.info(`处理选中文本: "${info.selectionText.substring(0, 20)}..."`);
       
       // 首先发送文本到API进行分析
-      await analyzeTextAPI(info.selectionText);
+      const tokens = await analyzeTextAPI(info.selectionText, tab.id);
+      
+      if (!tokens) {
+        console.warn('API分析没有返回有效数据');
+      }
       
       // 然后尝试通过content script处理
       const scriptReady = await isContentScriptReady(tab.id);
       
       if (scriptReady) {
-        // 使用content script高亮文本
+        // 使用content script高亮文本，并传递分析结果
         console.info(`使用content script高亮文本...`);
         await Browser.tabs.sendMessage(tab.id, {
           action: 'highlight-text',
-          text: info.selectionText
+          text: info.selectionText,
+          tokens: tokens
         });
         console.info(`已成功发送高亮请求到标签页 ${tab.id}`);
         return;
@@ -193,9 +112,122 @@ Browser.contextMenus.onClicked.addListener(async (info, tab) => {
       
       // 如果content script未准备好，尝试直接注入
       console.info(`Content script未准备好，尝试直接注入...`);
-      const injected = await injectHighlightScript(tab.id, info.selectionText);
       
-      if (injected) {
+      // 先注入CSS
+      await Browser.scripting.insertCSS({
+        target: { tabId: tab.id },
+        css: `
+          .kaku-yaku-highlight {
+            padding: 1px 2px;
+            cursor: pointer;
+            border-radius: 2px;
+            transition: all 0.2s ease;
+            position: relative;
+          }
+          
+          .kaku-yaku-highlight:hover {
+            box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+            opacity: 0.9;
+          }
+          
+          /* 不同词性的颜色 */
+          .kaku-yaku-名詞, .kaku-yaku-代名詞 { background-color: rgba(255, 99, 71, 0.3); }
+          .kaku-yaku-動詞 { background-color: rgba(65, 105, 225, 0.3); }
+          .kaku-yaku-形容詞 { background-color: rgba(60, 179, 113, 0.3); }
+          .kaku-yaku-副詞 { background-color: rgba(255, 165, 0, 0.3); }
+          .kaku-yaku-助詞 { background-color: rgba(186, 85, 211, 0.3); }
+          .kaku-yaku-接続詞 { background-color: rgba(70, 130, 180, 0.3); }
+          .kaku-yaku-感動詞 { background-color: rgba(255, 105, 180, 0.3); }
+          .kaku-yaku-助動詞 { background-color: rgba(240, 230, 140, 0.3); }
+          .kaku-yaku-連体詞 { background-color: rgba(173, 216, 230, 0.3); }
+          .kaku-yaku-接頭詞, .kaku-yaku-接尾辞 { background-color: rgba(144, 238, 144, 0.3); }
+          .kaku-yaku-接頭辞, .kaku-yaku-接尾辞 { background-color: rgba(144, 238, 144, 0.3); }
+          .kaku-yaku-補助記号 { background-color: rgba(169, 169, 169, 0.3); }
+          .kaku-yaku-形状詞 { background-color: rgba(138, 43, 226, 0.3); }
+          .kaku-yaku-default { background-color: rgba(169, 169, 169, 0.3); }
+        `
+      });
+      
+      // 然后直接注入带有分析结果的高亮脚本
+      const results = await Browser.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (selectedText: string, tokensData: TokenData[] | null) => {
+          // 将选中的文本添加不同颜色的背景
+          function highlightTextWithTokens(text: string, tokens: TokenData[] | null) {
+            if (!tokens || tokens.length === 0) {
+              // 如果没有分析结果，使用默认高亮
+              return highlightText(text, 'default');
+            }
+            
+            // 按照token高亮
+            let highlightCount = 0;
+            tokens.forEach(token => {
+              highlightCount += highlightText(token.surface, token.pos || 'default');
+            });
+            
+            return highlightCount;
+          }
+          
+          // 根据词性高亮特定文本
+          function highlightText(text: string, wordType: string) {
+            // 查找所有文本节点
+            function findTextNodes(element: Node): Text[] {
+              const nodes: Text[] = [];
+              
+              function traverse(node: Node) {
+                if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim() !== "") {
+                  nodes.push(node as Text);
+                } else {
+                  for (let i = 0; i < node.childNodes.length; i++) {
+                    traverse(node.childNodes[i]);
+                  }
+                }
+              }
+              
+              traverse(element);
+              return nodes;
+            }
+            
+            // 高亮匹配的文本
+            const textNodes = findTextNodes(document.body);
+            let count = 0;
+            
+            for (const node of textNodes) {
+              const content = node.textContent || "";
+              if (content.includes(text)) {
+                try {
+                  const range = document.createRange();
+                  const startIndex = content.indexOf(text);
+                  
+                  range.setStart(node, startIndex);
+                  range.setEnd(node, startIndex + text.length);
+                  
+                  const span = document.createElement("span");
+                  span.className = `kaku-yaku-highlight kaku-yaku-${wordType}`;
+                  span.title = `${text} (${wordType})`;
+                  
+                  range.surroundContents(span);
+                  count++;
+                } catch (e) {
+                  console.error("高亮文本时出错:", e);
+                }
+              }
+            }
+            
+            return count;
+          }
+          
+          // 执行高亮并返回结果
+          return highlightTextWithTokens(selectedText, tokensData);
+        },
+        args: [info.selectionText, tokens]
+      });
+      
+      // 检查执行结果
+      const highlightCount = results && results[0] && typeof results[0].result === 'number' ? results[0].result : 0;
+      console.info(`直接注入高亮了 ${highlightCount} 处文本`);
+      
+      if (highlightCount > 0) {
         console.info(`直接注入高亮成功`);
         return;
       }
@@ -228,7 +260,7 @@ self.onerror = function (message, source, lineno, colno, error) {
 console.info("Background脚本已加载");
 
 // 向API发送文本分析请求
-async function analyzeTextAPI(text: string): Promise<void> {
+async function analyzeTextAPI(text: string, tabId: number): Promise<TokenData[] | null> {
   try {
     console.info(`正在发送文本到API进行分析: "${text.substring(0, 20)}..."`);
     
@@ -254,8 +286,38 @@ async function analyzeTextAPI(text: string): Promise<void> {
     
     // 打印API响应结果
     console.info('API分析结果:', data);
+    
+    // 提取所有tokens形成一个扁平结构的分析结果
+    const allTokens: TokenData[] = [];
+    
+    if (data.sentences) {
+      data.sentences.forEach((sentence: any) => {
+        if (sentence.tokens) {
+          sentence.tokens.forEach((token: any) => {
+            // 统一API返回的词性值格式
+            let pos = token.pos || 'default';
+            
+            // 确保词性值与CSS类匹配
+            // 如果API返回"接頭辞"但CSS使用"接頭詞"，进行转换
+            if (pos === '接頭辞') pos = '接頭詞';
+            if (pos === '接尾辞') pos = '接尾辞';
+            
+            allTokens.push({
+              surface: token.surface,
+              pos: pos,
+              reading: token.reading,
+              dictionaryForm: token.dictionaryForm
+            });
+          });
+        }
+      });
+    }
+    
+    console.info(`共解析了 ${allTokens.length} 个语素`);
+    return allTokens;
   } catch (error) {
     console.error('API请求出错:', error);
+    return null;
   }
 }
 

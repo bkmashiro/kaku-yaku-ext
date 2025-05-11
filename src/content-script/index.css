@@ -1,12 +1,73 @@
 .kaku-yaku-highlight {
-  background-color: rgba(255, 0, 0, 0.3);
-  border-radius: 2px;
   padding: 1px 2px;
   cursor: pointer;
+  border-radius: 2px;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .kaku-yaku-highlight:hover {
-  background-color: rgba(255, 0, 0, 0.5);
-  box-shadow: 0 0 3px rgba(255, 0, 0, 0.5);
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+  opacity: 0.9;
+}
+
+/* 不同词性的颜色 */
+.kaku-yaku-名詞, .kaku-yaku-代名詞 {
+  background-color: rgba(255, 99, 71, 0.3); /* 红色 - 名词 */
+}
+
+.kaku-yaku-動詞 {
+  background-color: rgba(65, 105, 225, 0.3); /* 蓝色 - 动词 */
+}
+
+.kaku-yaku-形容詞 {
+  background-color: rgba(60, 179, 113, 0.3); /* 绿色 - 形容词 */
+}
+
+.kaku-yaku-副詞 {
+  background-color: rgba(255, 165, 0, 0.3); /* 橙色 - 副词 */
+}
+
+.kaku-yaku-助詞 {
+  background-color: rgba(186, 85, 211, 0.3); /* 紫色 - 助词 */
+}
+
+.kaku-yaku-接続詞 {
+  background-color: rgba(70, 130, 180, 0.3); /* 钢蓝色 - 连接词 */
+}
+
+.kaku-yaku-感動詞 {
+  background-color: rgba(255, 105, 180, 0.3); /* 粉色 - 感叹词 */
+}
+
+.kaku-yaku-助動詞 {
+  background-color: rgba(240, 230, 140, 0.3); /* 卡其色 - 助动词 */
+}
+
+.kaku-yaku-連体詞 {
+  background-color: rgba(173, 216, 230, 0.3); /* 浅蓝色 - 连体词 */
+}
+
+.kaku-yaku-接頭詞, .kaku-yaku-接尾辞 {
+  background-color: rgba(144, 238, 144, 0.3); /* 浅绿色 - 前缀词/后缀词 */
+}
+
+/* 兼容API返回的其他命名方式 */
+.kaku-yaku-接頭辞, .kaku-yaku-接尾辞 {
+  background-color: rgba(144, 238, 144, 0.3); /* 浅绿色 - 前缀词/后缀词 */
+}
+
+/* 补助记号 */
+.kaku-yaku-補助記号 {
+  background-color: rgba(169, 169, 169, 0.3); /* 灰色 - 补助记号 */
+}
+
+/* 形状词 */
+.kaku-yaku-形状詞 {
+  background-color: rgba(138, 43, 226, 0.3); /* 紫色 - 形状词 */
+}
+
+/* 默认颜色，用于未指定的词性 */
+.kaku-yaku-default {
+  background-color: rgba(169, 169, 169, 0.3); /* 灰色 - 默认 */
 } 
