@@ -174,7 +174,10 @@ Browser.contextMenus.onClicked.addListener(async (info, tab) => {
     try {
       console.info(`处理选中文本: "${info.selectionText.substring(0, 20)}..."`);
       
-      // 首先尝试通过content script处理
+      // 首先发送文本到API进行分析
+      await analyzeTextAPI(info.selectionText);
+      
+      // 然后尝试通过content script处理
       const scriptReady = await isContentScriptReady(tab.id);
       
       if (scriptReady) {
@@ -223,5 +226,37 @@ self.onerror = function (message, source, lineno, colno, error) {
 };
 
 console.info("Background脚本已加载");
+
+// 向API发送文本分析请求
+async function analyzeTextAPI(text: string): Promise<void> {
+  try {
+    console.info(`正在发送文本到API进行分析: "${text.substring(0, 20)}..."`);
+    
+    // 构建请求参数
+    const requestOptions = {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text })
+    };
+    
+    // 发送请求到API
+    const response = await fetch('http://localhost:3001/api/analysis/text', requestOptions);
+    
+    // 检查响应状态
+    if (!response.ok) {
+      throw new Error(`API请求失败: ${response.status} ${response.statusText}`);
+    }
+    
+    // 解析响应数据
+    const data = await response.json();
+    
+    // 打印API响应结果
+    console.info('API分析结果:', data);
+  } catch (error) {
+    console.error('API请求出错:', error);
+  }
+}
 
 export {};
