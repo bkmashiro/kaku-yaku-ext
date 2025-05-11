@@ -1,14 +1,12 @@
-.crx-iframe {
-  border: none;
-  border-radius: 8px;
-  box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.2),
-    0 -1px 0px rgba(0, 0, 0, 0.02);
-  background-color: #fff;
-  margin: 2em;
-  position: fixed;
-  bottom: 0;
-  right: 0;
-  width: 496px;
-  min-height: 420px;
+.kaku-yaku-highlight {
+  background-color: rgba(255, 0, 0, 0.3);
+  border-radius: 2px;
+  padding: 1px 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
+
+.kaku-yaku-highlight:hover {
+  background-color: rgba(255, 0, 0, 0.5);
+  box-shadow: 0 0 3px rgba(255, 0, 0, 0.5);
+} 

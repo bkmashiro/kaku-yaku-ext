@@ -44,7 +44,15 @@ export default {
   options_page: "src/ui/options-page/index.html",
   offline_enabled: true,
   host_permissions: ["<all_urls>"],
-  permissions: ["storage", "tabs", "background", "sidePanel"],
+  permissions: [
+    "storage",
+    "tabs",
+    "background",
+    "sidePanel",
+    "contextMenus",
+    "scripting",
+    "activeTab",
+  ],
   web_accessible_resources: [
     {
       resources: [

@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@nuxt/ui": "^3.1.1",
+    "floating-vue": "^2.0.0-beta.24",
     "marked": "^15.0.11",
     "pinia": "^3.0.2",
     "vue": "^3.5.13",
@@ -8,7 +9,7 @@
     "vue-router": "^4.5.1",
     "webextension-polyfill": "^0.12.0"
   },
-  "description": "A Vue 3 + Vite project for building Chrome extensions",
+  "description": "A browser extension for analyzing Japanese text grammar and vocabulary",
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.0.0-beta.32",
     "@eslint/compat": "^1.2.9",
@@ -49,8 +50,8 @@
     "web-ext": "^8.6.0",
     "webext-bridge": "^6.0.1"
   },
-  "displayName": "Vite Vue 3 Chrome Extension",
-  "name": "vite-vue3-browser-extension-v3",
+  "displayName": "Kaku-Yaku - Japanese Grammar Analyzer",
+  "name": "kaku-yaku-ext",
   "overrides": {
     "@crxjs/vite-plugin": "$@crxjs/vite-plugin"
   },
