@@ -105,6 +105,11 @@ const highlightTextWithTokens = (text: string, tokens: TokenData[]): number => {
         span.className = `kaku-yaku-highlight kaku-yaku-${normalizedPos}`;
         span.title = `${surface} (${normalizedPos})`;
         span.textContent = surface;
+        span.dataset.surface = surface;
+        span.dataset.reading = token.reading || '';
+        span.dataset.dictForm = token.dictionaryForm || surface;
+        span.dataset.pos = normalizedPos;
+        span.style.cursor = 'pointer';
         
         // 添加到文档片段
         fragment.appendChild(span);
@@ -159,6 +164,158 @@ const highlightText = (text: string, wordType: string): number => {
     return 0;
   }
 };
+
+// ── Hover Popup ──────────────────────────────────────────────────────────────
+
+function createPopup(): HTMLElement {
+  const existing = document.getElementById('kaku-yaku-popup');
+  if (existing) return existing;
+
+  const popup = document.createElement('div');
+  popup.id = 'kaku-yaku-popup';
+  popup.innerHTML = `
+    <div id="kky-surface" style="font-size:20px;font-weight:bold;margin-bottom:4px;"></div>
+    <div id="kky-reading" style="color:#89b4fa;margin-bottom:4px;font-size:15px;"></div>
+    <div id="kky-pos" style="font-size:11px;color:#a6e3a1;margin-bottom:10px;"></div>
+    <div id="kky-meanings" style="line-height:1.7;"></div>
+    <div id="kky-examples" style="margin-top:10px;font-size:12px;color:#cba6f7;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;"></div>
+    <div id="kky-jlpt" style="margin-top:6px;font-size:11px;color:#f38ba8;"></div>
+    <div id="kky-llm" style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;"></div>
+    <button id="kky-close" style="position:absolute;top:8px;right:10px;background:none;border:none;color:#6c7086;cursor:pointer;font-size:18px;line-height:1;">✕</button>
+    <button id="kky-explain" style="margin-top:10px;background:#313244;border:none;color:#cdd6f4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;">✨ 解释语法</button>
+    <button id="kky-translate" style="margin-top:10px;margin-left:6px;background:#313244;border:none;color:#cdd6f4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;">🌐 翻译句子</button>
+  `;
+  Object.assign(popup.style, {
+    display: 'none',
+    position: 'fixed',
+    zIndex: '2147483647',
+    background: '#1e1e2e',
+    color: '#cdd6f4',
+    borderRadius: '12px',
+    padding: '16px',
+    maxWidth: '340px',
+    minWidth: '220px',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+    fontFamily: 'sans-serif',
+    fontSize: '14px',
+    border: '1px solid rgba(255,255,255,0.12)',
+    lineHeight: '1.5',
+  });
+
+  document.body.appendChild(popup);
+
+  document.getElementById('kky-close')!.addEventListener('click', hidePopup);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hidePopup(); });
+  document.addEventListener('click', (e) => {
+    const pop = document.getElementById('kaku-yaku-popup');
+    if (pop && !pop.contains(e.target as Node) && !(e.target as Element).classList.contains('kaku-yaku-highlight')) {
+      hidePopup();
+    }
+  });
+
+  return popup;
+}
+
+function hidePopup() {
+  const popup = document.getElementById('kaku-yaku-popup');
+  if (popup) popup.style.display = 'none';
+}
+
+function showPopup(event: MouseEvent, span: HTMLElement) {
+  const popup = createPopup();
+
+  const surface = span.dataset.surface || span.textContent || '';
+  const reading = span.dataset.reading || '';
+  const dictForm = span.dataset.dictForm || surface;
+  const pos = span.dataset.pos || '';
+
+  // 清空旧内容
+  document.getElementById('kky-surface')!.textContent = surface;
+  document.getElementById('kky-reading')!.textContent = reading !== surface ? reading : '';
+  document.getElementById('kky-pos')!.textContent = pos;
+  document.getElementById('kky-meanings')!.innerHTML = '<span style="color:#6c7086">查询中…</span>';
+  document.getElementById('kky-examples')!.textContent = '';
+  document.getElementById('kky-jlpt')!.textContent = '';
+  document.getElementById('kky-llm')!.textContent = '';
+
+  // 定位
+  const x = Math.min(event.clientX, window.innerWidth - 360);
+  const y = event.clientY + 20;
+  popup.style.left = x + 'px';
+  popup.style.top = y + 'px';
+  popup.style.display = 'block';
+
+  // 向 background 请求详情
+  Browser.runtime.sendMessage({ action: 'get-token-detail', surface: dictForm || surface })
+    .then((data: any) => {
+      if (!data) return;
+      const tokens = data.tokens as any[];
+      const first = tokens?.[0];
+      if (!first) return;
+
+      // 释义
+      const meaningsEl = document.getElementById('kky-meanings')!;
+      const glosses: string[] = first.jmdict?.[0]?.meanings?.[0]?.glosses || [];
+      if (glosses.length > 0) {
+        meaningsEl.innerHTML = glosses.slice(0, 4).map(g => `• ${g}`).join('<br>');
+      } else {
+        meaningsEl.innerHTML = '<span style="color:#6c7086">（无词典数据）</span>';
+      }
+
+      // 例句
+      const ex = data.examples?.[0];
+      if (ex) {
+        document.getElementById('kky-examples')!.textContent = `例: ${ex.text}`;
+      }
+
+      // JLPT
+      const jlpt = first.jmdict?.[0]?.jlpt;
+      if (jlpt) {
+        document.getElementById('kky-jlpt')!.textContent = `JLPT ${jlpt}`;
+      }
+    })
+    .catch(() => {
+      document.getElementById('kky-meanings')!.innerHTML = '<span style="color:#f38ba8">查询失败</span>';
+    });
+
+  // LLM 按钮
+  document.getElementById('kky-explain')!.onclick = async () => {
+    const llmEl = document.getElementById('kky-llm')!;
+    llmEl.textContent = '✨ 解释中…';
+    try {
+      const res = await Browser.runtime.sendMessage({
+        action: 'llm-explain-grammar',
+        sentence: span.closest('p,div,span,li,article,section')?.textContent?.slice(0, 200) || surface,
+        targetWord: surface,
+      }) as any;
+      llmEl.innerHTML = `<strong>语法解析</strong><br>${res.explanation || '无结果'}`;
+    } catch { llmEl.textContent = '请求失败'; }
+  };
+
+  document.getElementById('kky-translate')!.onclick = async () => {
+    const llmEl = document.getElementById('kky-llm')!;
+    llmEl.textContent = '🌐 翻译中…';
+    const sentence = span.closest('p,div,span,li,article,section')?.textContent?.slice(0, 300) || surface;
+    try {
+      const res = await Browser.runtime.sendMessage({
+        action: 'llm-translate',
+        sentence,
+      }) as any;
+      llmEl.innerHTML = `<strong>翻译</strong><br>${res.translation || ''}<br><span style="color:#a6adc8;font-size:12px">${res.breakdown || ''}</span>`;
+    } catch { llmEl.textContent = '请求失败'; }
+  };
+}
+
+// 监听高亮词点击
+document.addEventListener('click', (e) => {
+  const target = e.target as HTMLElement;
+  if (target.classList.contains('kaku-yaku-highlight')) {
+    e.stopPropagation();
+    showPopup(e as MouseEvent, target);
+  }
+});
+
+// ── 消息监听 ─────────────────────────────────────────────────────────────────
 
 // 监听来自background脚本的消息
 Browser.runtime.onMessage.addListener((message: any) => {

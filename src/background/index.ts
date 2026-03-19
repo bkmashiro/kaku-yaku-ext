@@ -46,15 +46,46 @@ Browser.runtime.onInstalled.addListener(() => {
   console.info("右键菜单已创建");
 });
 
-// 监听content script的就绪消息
+const API_BASE = 'http://localhost:3001/api';
+
+// 监听content script的就绪消息 + token详情 + LLM请求
 Browser.runtime.onMessage.addListener((
   message: unknown, 
   sender: Browser.Runtime.MessageSender
 ) => {
   const msg = message as ContentScriptMessage;
+  
   if (msg.action === 'content-script-ready' && sender.tab?.id) {
-    console.info(`标签页 ${sender.tab.id} (${sender.url}) content script已准备就绪`);
+    console.info(`标签页 ${sender.tab.id} content script已准备就绪`);
     contentScriptTabs.add(sender.tab.id);
+    return;
+  }
+
+  // Token 详情查询
+  if (msg.action === 'get-token-detail') {
+    return fetch(`${API_BASE}/analysis/quick?sentence=${encodeURIComponent((msg as any).surface)}`)
+      .then(r => r.json())
+      .catch(() => null);
+  }
+
+  // LLM 语法解析
+  if (msg.action === 'llm-explain-grammar') {
+    const m = msg as any;
+    return fetch(`${API_BASE}/llm/explain-grammar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sentence: m.sentence, targetWord: m.targetWord }),
+    }).then(r => r.json()).catch(() => ({ explanation: '请求失败' }));
+  }
+
+  // LLM 翻译
+  if (msg.action === 'llm-translate') {
+    const m = msg as any;
+    return fetch(`${API_BASE}/llm/translate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sentence: m.sentence }),
+    }).then(r => r.json()).catch(() => ({ translation: '请求失败', breakdown: '' }));
   }
 });
 
