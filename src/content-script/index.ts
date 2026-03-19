@@ -335,9 +335,10 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
 
       // 释义
       const meaningsEl = document.getElementById('kky-meanings')!;
-      const glosses: string[] = first.jmdict?.[0]?.meanings?.[0]?.glosses || [];
+      // API returns gloss as string[] directly on jmdict entry
+      const glosses: string[] = first.jmdict?.[0]?.gloss || first.jmdict?.[0]?.meanings?.[0]?.glosses || [];
       if (glosses.length > 0) {
-        meaningsEl.innerHTML = glosses.slice(0, 4).map(g => `• ${g}`).join('<br>');
+        meaningsEl.innerHTML = glosses.slice(0, 4).map((g: string) => `• ${g}`).join('<br>');
       } else {
         meaningsEl.innerHTML = '<span style="color:#6c7086">（无词典数据）</span>';
       }
