@@ -318,11 +318,13 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
   document.getElementById('kky-jlpt')!.textContent = '';
   document.getElementById('kky-llm')!.textContent = '';
 
-  // 定位
-  const x = Math.min(event.clientX, window.innerWidth - 360);
-  const y = event.clientY + 20;
-  popup.style.left = x + 'px';
-  popup.style.top = y + 'px';
+  // 定位 — 吸附 viewport 边界，fixed 定位不跟随滚动
+  const POPUP_W = 340, POPUP_H = 320;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const rawX = event.clientX + 12;
+  const rawY = event.clientY + 20;
+  popup.style.left = Math.min(rawX, vw - POPUP_W - 8) + 'px';
+  popup.style.top  = Math.min(rawY, vh - POPUP_H - 8) + 'px';
   popup.style.display = 'block';
 
   // 向 background 请求详情
@@ -381,26 +383,43 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
   // LLM 按钮
   document.getElementById('kky-explain')!.onclick = async () => {
     const llmEl = document.getElementById('kky-llm')!;
-    llmEl.textContent = '✨ 解释中…';
+    llmEl.innerHTML = '<span style="color:#6c7086">✨ 解释中…</span>';
     try {
       const res = await Browser.runtime.sendMessage({
         action: 'llm-explain-grammar',
         sentence: getSentenceContext(300),
         targetWord: surface,
       }) as any;
-      llmEl.innerHTML = `<strong>语法解析</strong><br>${res.explanation || '无结果'}`;
+      // res: { role, function, rule, example, exampleTrans }
+      llmEl.innerHTML = `
+        <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;margin-top:4px;">
+          <div style="color:#89dceb;font-size:11px;font-weight:600;margin-bottom:6px;">✨ 语法解析 · <em>${surface}</em></div>
+          ${res.role ? `<div style="margin-bottom:4px"><span style="color:#a6e3a1;font-size:11px">词性</span> ${res.role}</div>` : ''}
+          ${res.function ? `<div style="margin-bottom:4px"><span style="color:#a6e3a1;font-size:11px">作用</span> ${res.function}</div>` : ''}
+          ${res.rule ? `<div style="margin-bottom:4px;color:#cba6f7;font-size:12px">💡 ${res.rule}</div>` : ''}
+          ${res.example ? `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px">${res.example}<br><span style="color:#a6adc8">${res.exampleTrans || ''}</span></div>` : ''}
+        </div>`.trim();
     } catch (e: any) { llmEl.textContent = '请求失败: ' + (e?.message || e); }
   };
 
   document.getElementById('kky-translate')!.onclick = async () => {
     const llmEl = document.getElementById('kky-llm')!;
-    llmEl.textContent = '🌐 翻译中…';
+    llmEl.innerHTML = '<span style="color:#6c7086">🌐 翻译中…</span>';
     try {
       const res = await Browser.runtime.sendMessage({
         action: 'llm-translate',
         sentence: getSentenceContext(400),
       }) as any;
-      llmEl.innerHTML = `<strong>翻译</strong><br>${res.translation || ''}<br><span style="color:#a6adc8;font-size:12px">${res.breakdown || ''}</span>`;
+      // res: { translation, chunks: [{jp, en}] }
+      const chunksHtml = (res.chunks || [])
+        .map((c: any) => `<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 6px;background:rgba(255,255,255,0.08);border-radius:4px;font-size:11px"><span style="color:#89b4fa">${c.jp}</span> <span style="color:#a6adc8">${c.en}</span></span>`)
+        .join('');
+      llmEl.innerHTML = `
+        <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;margin-top:4px;">
+          <div style="color:#89dceb;font-size:11px;font-weight:600;margin-bottom:6px;">🌐 翻译</div>
+          <div style="margin-bottom:8px;font-size:13px">${res.translation || ''}</div>
+          ${chunksHtml ? `<div style="margin-top:4px">${chunksHtml}</div>` : ''}
+        </div>`.trim();
     } catch (e: any) { llmEl.textContent = '请求失败: ' + (e?.message || e); }
   };
 }
