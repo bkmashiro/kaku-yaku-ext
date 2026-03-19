@@ -18,6 +18,20 @@ interface TokenData {
   dictionaryForm?: string;
 }
 
+// ── Settings loader ───────────────────────────────────────────────────────────
+let kkSettings = {
+  explanationLang: "English",
+  furigana: false,
+  furiganaMode: "hover" as "hover" | "always",
+  showCacheIndicator: true,
+}
+Browser.storage.sync.get("kakuyaku-settings").then((d: any) => {
+  if (d?.["kakuyaku-settings"]) Object.assign(kkSettings, d["kakuyaku-settings"])
+})
+Browser.storage.onChanged.addListener((changes: any, area: string) => {
+  if (area === "sync" && changes["kakuyaku-settings"]) Object.assign(kkSettings, changes["kakuyaku-settings"].newValue)
+})
+
 // 设置一个标记表示content script已加载
 if (!window.hasOwnProperty('kakuYakuLoaded')) {
   window.kakuYakuLoaded = true;
@@ -45,7 +59,7 @@ const notifyReady = () => {
 const normalizePos = (pos: string): string => {
   // 默认词性
   if (!pos) return 'default';
-  
+
   // 转换API返回的不同写法
   switch (pos) {
     case '接頭辞':
@@ -61,13 +75,13 @@ const normalizePos = (pos: string): string => {
 const highlightSelectedText = (selectedText: string, tokens?: TokenData[]) => {
   try {
     console.info("准备高亮文本:", selectedText);
-    
+
     // 如果提供了tokens数据，使用带词性的高亮
     if (tokens && tokens.length > 0) {
       console.info(`使用词性数据高亮 ${tokens.length} 个语素`);
       return highlightTextWithTokens(selectedText, tokens);
     }
-    
+
     // 否则使用普通高亮
     console.info("使用普通高亮");
     return highlightText(selectedText, 'default');
@@ -86,22 +100,20 @@ const highlightTextWithTokens = (text: string, tokens: TokenData[]): number => {
       console.warn("无法获取用户选择范围");
       return 0;
     }
-    
+
     // 创建一个片段用于插入高亮内容
     const range = selection.getRangeAt(0).cloneRange();
     range.deleteContents();
-    
+
     // 创建包含所有高亮token的文档片段
     const fragment = document.createDocumentFragment();
-    
+
     // 合并动词活用形和助动词链，让高亮更自然
     // 规则：
     //   1. 動詞 + 助動詞* → 食べた、食べている、食べられた
     //   2. 名詞 + する(動詞) + 助動詞* → 落成した、参加します
     //   3. 形容詞/形容動詞 + 助動詞* → 美しかった、静かだった
     //   4. 動詞 + て(助詞) + いる/ある/おく(動詞) + 助動詞* → 食べている
-    const isAuxChain = (t: TokenData) =>
-      t.pos?.includes('助動詞') || t.pos?.includes('助詞');
     const isVerb = (t: TokenData) => t.pos?.includes('動詞');
     const isAdj = (t: TokenData) => t.pos?.includes('形容詞') || t.pos?.includes('形容動詞');
     const isSahenNoun = (t: TokenData) =>
@@ -178,32 +190,57 @@ const highlightTextWithTokens = (text: string, tokens: TokenData[]): number => {
     mergedTokens.forEach(token => {
       const normalizedPos = normalizePos(token.pos);
       const surface = token.surface;
-      
+
       if (surface) {
-        // 创建span元素
-        const span = document.createElement('span');
-        span.className = `kaku-yaku-highlight kaku-yaku-${normalizedPos}`;
-        span.title = `${surface} (${normalizedPos})`;
-        span.textContent = surface;
-        span.dataset.surface = surface;
-        span.dataset.reading = token.reading || '';
-        span.dataset.dictForm = (token as any).dictionaryForm || surface;
-        span.dataset.pos = normalizedPos;
-        span.style.cursor = 'pointer';
-        
-        // 添加到文档片段
-        fragment.appendChild(span);
+        if (kkSettings.furigana && token.reading && token.reading !== surface) {
+          // 创建 ruby 元素
+          const ruby = document.createElement('ruby');
+          ruby.className = `kaku-yaku-highlight kaku-yaku-${normalizedPos}`;
+          ruby.title = `${surface} (${normalizedPos})`;
+          ruby.dataset.surface = surface;
+          ruby.dataset.reading = token.reading || '';
+          ruby.dataset.dictForm = (token as any).dictionaryForm || surface;
+          ruby.dataset.pos = normalizedPos;
+          ruby.style.cursor = 'pointer';
+          ruby.textContent = surface;
+
+          const rt = document.createElement('rt');
+          rt.textContent = token.reading;
+          rt.style.fontSize = '0.65em';
+          rt.style.color = '#89b4fa';
+          if (kkSettings.furiganaMode === 'hover') {
+            rt.style.opacity = '0';
+            rt.style.transition = 'opacity 0.15s';
+            ruby.addEventListener('mouseenter', () => { rt.style.opacity = '1'; });
+            ruby.addEventListener('mouseleave', () => { rt.style.opacity = '0'; });
+          }
+          ruby.appendChild(rt);
+          fragment.appendChild(ruby);
+        } else {
+          // 创建普通 span 元素
+          const span = document.createElement('span');
+          span.className = `kaku-yaku-highlight kaku-yaku-${normalizedPos}`;
+          span.title = `${surface} (${normalizedPos})`;
+          span.textContent = surface;
+          span.dataset.surface = surface;
+          span.dataset.reading = token.reading || '';
+          span.dataset.dictForm = (token as any).dictionaryForm || surface;
+          span.dataset.pos = normalizedPos;
+          span.style.cursor = 'pointer';
+
+          fragment.appendChild(span);
+        }
         console.info(`已创建 "${surface}" (${normalizedPos}) 的高亮元素`);
       }
     });
-    
+
     // 插入构建好的文档片段
     range.insertNode(fragment);
     console.info(`成功替换选中文本为高亮元素`);
-    
+
     // 清除选择状态
     selection.removeAllRanges();
-    
+
     return tokens.length;
   } catch (error) {
     console.error("使用tokens高亮文本时出错:", error);
@@ -220,23 +257,23 @@ const highlightText = (text: string, wordType: string): number => {
       console.warn("无法获取用户选择范围");
       return 0;
     }
-    
+
     // 克隆当前选择的范围
     const range = selection.getRangeAt(0).cloneRange();
-    
+
     // 创建高亮元素
     const span = document.createElement('span');
     span.className = `kaku-yaku-highlight kaku-yaku-${wordType}`;
     span.title = `${text} (${wordType})`;
-    
+
     // 替换选中内容
     range.deleteContents();
     span.textContent = text;
     range.insertNode(span);
-    
+
     // 清除选择状态
     selection.removeAllRanges();
-    
+
     console.info(`已高亮选中文本: "${text}" (${wordType})`);
     return 1;
   } catch (error) {
@@ -271,6 +308,7 @@ function createPopup(): HTMLElement {
     <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
       <button id="kky-explain" style="background:#313244;border:none;color:#cdd6f4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">✨ 解释语法</button>
       <button id="kky-translate" style="background:#313244;border:none;color:#cdd6f4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">🌐 翻译</button>
+      <button id="kky-save" style="background:#313244;border:none;color:#cdd6f4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">＋ 生词本</button>
       <button id="kky-close" style="margin-left:auto;background:none;border:none;color:#6c7086;cursor:pointer;font-size:18px;line-height:1">✕</button>
     </div>
   `;
@@ -339,6 +377,24 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
   popup.style.top  = docY + 'px';
   popup.style.display = 'block';
 
+  // Reset save button state
+  const saveBtn = document.getElementById('kky-save')!;
+  saveBtn.textContent = '＋ 生词本';
+  (saveBtn as HTMLButtonElement).style.color = '#cdd6f4';
+
+  // Check if already saved
+  Browser.storage.local.get('kakuyaku-vocab').then((d: any) => {
+    const vocab: any[] = d?.['kakuyaku-vocab'] || [];
+    const alreadySaved = vocab.some((v: any) => v.surface === surface && v.dictForm === (dictForm || surface));
+    if (alreadySaved) {
+      saveBtn.textContent = '✅ 已保存';
+      (saveBtn as HTMLButtonElement).style.color = '#a6e3a1';
+    }
+  });
+
+  let jlptValue = '';
+  let exampleText = '';
+
   // 向 background 请求详情
   Browser.runtime.sendMessage({ action: 'get-token-detail', surface: dictForm || surface })
     .then((data: any) => {
@@ -360,15 +416,49 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
       // 例句
       const ex = data.examples?.[0];
       if (ex) {
+        exampleText = ex.text;
         document.getElementById('kky-examples')!.textContent = `例: ${ex.text}`;
       }
 
       // JLPT badge — show as "N3" not "JLPT N3"
       const jlpt = first.jmdict?.[0]?.jlpt;
       if (jlpt) {
-        const jlptVal = String(jlpt).replace(/^JLPT\s*/i, '');
-        document.getElementById('kky-jlpt')!.textContent = jlptVal;
+        jlptValue = String(jlpt).replace(/^JLPT\s*/i, '');
+        document.getElementById('kky-jlpt')!.textContent = jlptValue;
       }
+
+      // Wire save button after data loaded
+      saveBtn.onclick = async () => {
+        const d2 = await Browser.storage.local.get('kakuyaku-vocab');
+        const vocab: any[] = (d2 as any)?.['kakuyaku-vocab'] || [];
+        const alreadySaved = vocab.some((v: any) => v.surface === surface && v.dictForm === (dictForm || surface));
+        if (alreadySaved) {
+          saveBtn.textContent = '✅ 已保存';
+          (saveBtn as HTMLButtonElement).style.color = '#a6e3a1';
+          return;
+        }
+        // Parse meanings from popup
+        const meaningsText = document.getElementById('kky-meanings')!.innerText;
+        const parsedMeanings = meaningsText.split('\n').map(s => s.replace(/^•\s*/, '').trim()).filter(Boolean);
+        const entry = {
+          id: surface + '_' + Date.now(),
+          surface,
+          reading,
+          dictForm: dictForm || surface,
+          pos,
+          meanings: parsedMeanings.length ? parsedMeanings : glosses,
+          jlpt: jlptValue,
+          addedAt: Date.now(),
+          example: exampleText,
+          exampleTrans: '',
+          status: 'new',
+          reviewCount: 0,
+        };
+        vocab.push(entry);
+        await Browser.storage.local.set({ 'kakuyaku-vocab': vocab });
+        saveBtn.textContent = '✅ 已保存';
+        (saveBtn as HTMLButtonElement).style.color = '#a6e3a1';
+      };
     })
     .catch(() => {
       document.getElementById('kky-meanings')!.innerHTML = '<span style="color:#f38ba8">查询失败</span>';
@@ -441,7 +531,7 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
     if (cached) { renderGrammar(cached); grammarShown = true; explainBtn.textContent = '✅ 语法解析'; return; }
     explainBtn.textContent = '⏳ 解释中…';
     try {
-      const lang = await Browser.storage.local.get('kakuyaku').then((d: any) => d?.kakuyaku?.explanationLang || 'English');
+      const lang = await Browser.storage.sync.get('kakuyaku-settings').then((d: any) => d?.['kakuyaku-settings']?.explanationLang || 'English');
       const res = await Browser.runtime.sendMessage({
         action: 'llm-explain-grammar',
         sentence: getSentenceContext(300),
@@ -450,6 +540,16 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
       }) as any;
       if (!llmCache.has(cacheKey)) llmCache.set(cacheKey, {});
       llmCache.get(cacheKey)!.grammar = res;
+
+      // Cache indicator
+      if (kkSettings.showCacheIndicator) {
+        const c = span.closest('p,li,td,blockquote,article,section');
+        if (c) {
+          (c as HTMLElement).style.borderLeft = '2px solid rgba(137,220,235,0.35)';
+          (c as HTMLElement).style.paddingLeft = '6px';
+        }
+      }
+
       renderGrammar(res);
       grammarShown = true;
       explainBtn.textContent = '✅ 语法解析';
@@ -470,6 +570,16 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
       }) as any;
       if (!llmCache.has(cacheKey)) llmCache.set(cacheKey, {});
       llmCache.get(cacheKey)!.translation = res;
+
+      // Cache indicator
+      if (kkSettings.showCacheIndicator) {
+        const c = span.closest('p,li,td,blockquote,article,section');
+        if (c) {
+          (c as HTMLElement).style.borderLeft = '2px solid rgba(137,220,235,0.35)';
+          (c as HTMLElement).style.paddingLeft = '6px';
+        }
+      }
+
       renderTranslation(res);
       translateShown = true;
       translateBtn.textContent = '✅ 翻译';
@@ -480,9 +590,12 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
 // 监听高亮词点击
 document.addEventListener('click', (e) => {
   const target = e.target as HTMLElement;
-  if (target.classList.contains('kaku-yaku-highlight')) {
+  const highlight = target.classList.contains('kaku-yaku-highlight')
+    ? target
+    : target.closest('.kaku-yaku-highlight') as HTMLElement;
+  if (highlight) {
     e.stopPropagation();
-    showPopup(e as MouseEvent, target);
+    showPopup(e as MouseEvent, highlight);
   }
 });
 
@@ -491,7 +604,7 @@ document.addEventListener('click', (e) => {
 // 监听来自background脚本的消息
 Browser.runtime.onMessage.addListener((message: any) => {
   console.info("收到消息:", message);
-  
+
   if (message.action === "highlight-text") {
     if (message.text) {
       if (message.tokens) {
@@ -508,7 +621,7 @@ Browser.runtime.onMessage.addListener((message: any) => {
     // 回复ping以确认content script已加载
     return Promise.resolve({ action: "pong" });
   }
-  
+
   return true;
 });
 

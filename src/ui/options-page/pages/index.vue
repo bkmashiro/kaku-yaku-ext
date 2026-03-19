@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const optionsStore = useOptionsStore()
-const { isDark, profile, others, kakuYaku } = storeToRefs(optionsStore)
+const { isDark, profile, others, kkSettings } = storeToRefs(optionsStore)
 
 const LANG_OPTIONS = [
   { value: 'English', label: 'English' },
@@ -10,6 +10,11 @@ const LANG_OPTIONS = [
   { value: 'Français', label: 'Français (French)' },
   { value: 'Deutsch', label: 'Deutsch (German)' },
   { value: 'Español', label: 'Español (Spanish)' },
+]
+
+const FURIGANA_MODE_OPTIONS = [
+  { value: 'hover', label: 'ホバー時表示 (Hover)' },
+  { value: 'always', label: '常に表示 (Always)' },
 ]
 </script>
 
@@ -64,11 +69,28 @@ const LANG_OPTIONS = [
 
       <UFormField label="语法解释语言" description="AI 语法解析和翻译将使用此语言输出">
         <USelect
-          v-model="kakuYaku.explanationLang"
+          v-model="kkSettings.explanationLang"
           :options="LANG_OPTIONS"
           value-attribute="value"
           option-attribute="label"
         />
+      </UFormField>
+
+      <UFormField label="振り仮名 (Furigana)" description="在高亮词上方显示读音">
+        <USwitch v-model="kkSettings.furigana" />
+      </UFormField>
+
+      <UFormField v-if="kkSettings.furigana" label="振り仮名表示モード" description="选择何时显示振り仮名">
+        <USelect
+          v-model="kkSettings.furiganaMode"
+          :options="FURIGANA_MODE_OPTIONS"
+          value-attribute="value"
+          option-attribute="label"
+        />
+      </UFormField>
+
+      <UFormField label="缓存指示器" description="已缓存 LLM 结果的段落显示左侧蓝色边框">
+        <USwitch v-model="kkSettings.showCacheIndicator" />
       </UFormField>
     </UForm>
   </div>

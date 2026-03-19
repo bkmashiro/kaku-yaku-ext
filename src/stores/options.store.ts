@@ -1,3 +1,18 @@
+export interface VocabEntry {
+  id: string
+  surface: string
+  reading: string
+  dictForm: string
+  pos: string
+  meanings: string[]
+  jlpt: string
+  addedAt: number
+  example: string
+  exampleTrans: string
+  status: 'new' | 'learning' | 'known'
+  reviewCount: number
+}
+
 export const useOptionsStore = defineStore("options", () => {
   const { isDark, toggleDark } = useTheme()
 
@@ -17,17 +32,26 @@ export const useOptionsStore = defineStore("options", () => {
     counter: 0,
   })
 
-  const { data: kakuYaku } = useBrowserLocalStorage<{
+  const { data: kkSettings } = useBrowserSyncStorage<{
     explanationLang: string
-  }>("kakuyaku", {
+    furigana: boolean
+    furiganaMode: 'hover' | 'always'
+    showCacheIndicator: boolean
+  }>("kakuyaku-settings", {
     explanationLang: "English",
+    furigana: false,
+    furiganaMode: "hover",
+    showCacheIndicator: true,
   })
+
+  const { data: vocabulary } = useBrowserLocalStorage<VocabEntry[]>("kakuyaku-vocab", [])
 
   return {
     isDark,
     toggleDark,
     profile,
     others,
-    kakuYaku,
+    kkSettings,
+    vocabulary,
   }
 })
