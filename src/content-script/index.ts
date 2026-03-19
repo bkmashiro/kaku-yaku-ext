@@ -267,7 +267,7 @@ function createPopup(): HTMLElement {
   `;
   Object.assign(popup.style, {
     display: 'none',
-    position: 'fixed',
+    position: 'absolute',
     zIndex: '2147483647',
     background: '#1e1e2e',
     color: '#cdd6f4',
@@ -318,13 +318,16 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
   document.getElementById('kky-jlpt')!.textContent = '';
   document.getElementById('kky-llm')!.textContent = '';
 
-  // 定位 — 吸附 viewport 边界，fixed 定位不跟随滚动
-  const POPUP_W = 340, POPUP_H = 320;
-  const vw = window.innerWidth, vh = window.innerHeight;
-  const rawX = event.clientX + 12;
-  const rawY = event.clientY + 20;
-  popup.style.left = Math.min(rawX, vw - POPUP_W - 8) + 'px';
-  popup.style.top  = Math.min(rawY, vh - POPUP_H - 8) + 'px';
+  // 定位 — absolute 跟随文档，吸附在点击词色块正下方
+  const POPUP_W = 340;
+  const rect = span.getBoundingClientRect();
+  // 文档坐标 = viewport坐标 + 滚动偏移
+  const docX = rect.left + window.scrollX;
+  const docY = rect.bottom + window.scrollY + 6;
+  // 防止超出右边界（用 viewport 宽做参考）
+  const clampedX = Math.min(docX, window.scrollX + window.innerWidth - POPUP_W - 8);
+  popup.style.left = Math.max(clampedX, window.scrollX + 8) + 'px';
+  popup.style.top  = docY + 'px';
   popup.style.display = 'block';
 
   // 向 background 请求详情
