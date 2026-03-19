@@ -94,37 +94,84 @@ const highlightTextWithTokens = (text: string, tokens: TokenData[]): number => {
     // 创建包含所有高亮token的文档片段
     const fragment = document.createDocumentFragment();
     
-    // 合并相邻的「名詞/サ変接続 + する/した/して/します」为一个suru-verb span
+    // 合并动词活用形和助动词链，让高亮更自然
+    // 规则：
+    //   1. 動詞 + 助動詞* → 食べた、食べている、食べられた
+    //   2. 名詞 + する(動詞) + 助動詞* → 落成した、参加します
+    //   3. 形容詞/形容動詞 + 助動詞* → 美しかった、静かだった
+    //   4. 動詞 + て(助詞) + いる/ある/おく(動詞) + 助動詞* → 食べている
+    const isAuxChain = (t: TokenData) =>
+      t.pos?.includes('助動詞') || t.pos?.includes('助詞');
+    const isVerb = (t: TokenData) => t.pos?.includes('動詞');
+    const isAdj = (t: TokenData) => t.pos?.includes('形容詞') || t.pos?.includes('形容動詞');
+    const isSahenNoun = (t: TokenData) =>
+      t.pos?.includes('名詞') && (t as any).posDetail?.includes('サ変接続');
+
     const mergedTokens: TokenData[] = [];
     for (let i = 0; i < tokens.length; i++) {
-      const cur = tokens[i];
-      const next = tokens[i + 1];
-      // サ変接続名詞 + する系动词 → 合并
-      if (
-        cur.pos?.includes('名詞') &&
-        next &&
-        next.pos?.includes('動詞') &&
-        (next as any).dictionaryForm === 'する'
-      ) {
-        // 继续合并后面的助动词链（した、します、している等）
-        let combined = cur.surface + next.surface;
-        let combinedReading = (cur.reading || cur.surface) + (next.reading || next.surface);
-        let j = i + 2;
-        while (j < tokens.length && tokens[j].pos?.includes('助動詞')) {
-          combined += tokens[j].surface;
-          combinedReading += tokens[j].reading || tokens[j].surface;
-          j++;
-        }
-        mergedTokens.push({
-          surface: combined,
-          reading: combinedReading,
-          dictionaryForm: cur.surface + 'する',
-          pos: '動詞', // 整体是动词
-        });
-        i = j - 1; // 跳过已合并的
-      } else {
+      const cur = tokens[i] as any;
+      let j = i + 1;
+
+      const isHead = isVerb(cur) || isAdj(cur) ||
+        (isSahenNoun(cur) && tokens[j] && isVerb(tokens[j]) && (tokens[j] as any).dictionaryForm === 'する');
+
+      if (!isHead) {
         mergedTokens.push(cur);
+        continue;
       }
+
+      // サ変名詞の場合、まず する を取り込む
+      let combined = cur.surface;
+      let combinedReading = cur.reading || cur.surface;
+      const dictForm = isVerb(cur)
+        ? cur.dictionaryForm || cur.surface
+        : isSahenNoun(cur)
+          ? cur.surface + 'する'
+          : cur.dictionaryForm || cur.surface;
+
+      if (isSahenNoun(cur) && tokens[j] && isVerb(tokens[j]) && (tokens[j] as any).dictionaryForm === 'する') {
+        combined += tokens[j].surface;
+        combinedReading += tokens[j].reading || tokens[j].surface;
+        j++;
+      }
+
+      // 以下のパターンを貪欲にマージ:
+      //   助動詞、または て+いる/ある/おく のチェーン
+      while (j < tokens.length) {
+        const t = tokens[j] as any;
+        if (t.pos?.includes('助動詞')) {
+          combined += t.surface;
+          combinedReading += t.reading || t.surface;
+          j++;
+        } else if (
+          t.surface === 'て' || t.surface === 'で' // 接続助詞 て/で
+        ) {
+          const after = tokens[j + 1] as any;
+          if (after && isVerb(after) && ['いる','ある','おく','しまう','みる','くる'].includes(after.dictionaryForm)) {
+            combined += t.surface + after.surface;
+            combinedReading += (t.reading || t.surface) + (after.reading || after.surface);
+            j += 2;
+            // さらに助動詞が続く場合
+            while (j < tokens.length && (tokens[j] as any).pos?.includes('助動詞')) {
+              combined += tokens[j].surface;
+              combinedReading += (tokens[j] as any).reading || tokens[j].surface;
+              j++;
+            }
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
+
+      mergedTokens.push({
+        surface: combined,
+        reading: combinedReading,
+        dictionaryForm: dictForm,
+        pos: isAdj(cur) ? cur.pos : '動詞',
+      });
+      i = j - 1;
     }
 
     // 遍历合并后的tokens，分别创建高亮元素
