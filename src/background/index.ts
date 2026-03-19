@@ -46,7 +46,7 @@ Browser.runtime.onInstalled.addListener(() => {
   console.info("右键菜单已创建");
 });
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = 'http://100.73.231.27:3001/api';
 
 // 监听content script的就绪消息 + token详情 + LLM请求
 Browser.runtime.onMessage.addListener((
@@ -58,14 +58,17 @@ Browser.runtime.onMessage.addListener((
   if (msg.action === 'content-script-ready' && sender.tab?.id) {
     console.info(`标签页 ${sender.tab.id} content script已准备就绪`);
     contentScriptTabs.add(sender.tab.id);
-    return;
+    return Promise.resolve({ ok: true });
   }
 
   // Token 详情查询
   if (msg.action === 'get-token-detail') {
     return fetch(`${API_BASE}/analysis/quick?sentence=${encodeURIComponent((msg as any).surface)}`)
-      .then(r => r.json())
-      .catch(() => null);
+      .then(r => {
+        if (!r.ok) { console.error('get-token-detail API error:', r.status); return null; }
+        return r.json();
+      })
+      .catch(e => { console.error('get-token-detail fetch failed:', e); return null; });
   }
 
   // LLM 语法解析
@@ -75,7 +78,10 @@ Browser.runtime.onMessage.addListener((
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sentence: m.sentence, targetWord: m.targetWord }),
-    }).then(r => r.json()).catch(() => ({ explanation: '请求失败' }));
+    }).then(r => {
+      if (!r.ok) { console.error('llm-explain-grammar API error:', r.status); return { explanation: `API错误 ${r.status}` }; }
+      return r.json();
+    }).catch(e => { console.error('llm-explain-grammar fetch failed:', e); return { explanation: '请求失败: ' + e.message }; });
   }
 
   // LLM 翻译
@@ -85,8 +91,13 @@ Browser.runtime.onMessage.addListener((
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sentence: m.sentence }),
-    }).then(r => r.json()).catch(() => ({ translation: '请求失败', breakdown: '' }));
+    }).then(r => {
+      if (!r.ok) { console.error('llm-translate API error:', r.status); return { translation: `API错误 ${r.status}`, breakdown: '' }; }
+      return r.json();
+    }).catch(e => { console.error('llm-translate fetch failed:', e); return { translation: '请求失败: ' + e.message, breakdown: '' }; });
   }
+
+  return Promise.resolve(null);
 });
 
 // 检查content script是否已准备好
@@ -304,7 +315,7 @@ async function analyzeTextAPI(text: string, tabId: number): Promise<TokenData[] 
     };
     
     // 发送请求到API
-    const response = await fetch('http://localhost:3001/api/analysis/text', requestOptions);
+    const response = await fetch('http://100.73.231.27:3001/api/analysis/text', requestOptions);
     
     // 检查响应状态
     if (!response.ok) {

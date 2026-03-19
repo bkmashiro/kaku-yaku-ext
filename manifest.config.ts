@@ -43,7 +43,7 @@ export default {
   devtools_page: "src/devtools/index.html",
   options_page: "src/ui/options-page/index.html",
   offline_enabled: true,
-  host_permissions: ["<all_urls>", "http://localhost:3000/*"],
+  host_permissions: ["<all_urls>", "http://localhost:3000/*", "http://localhost:3001/*", "http://100.73.231.27:3001/*"],
   permissions: [
     "storage",
     "tabs",

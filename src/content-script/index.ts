@@ -278,6 +278,25 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
       document.getElementById('kky-meanings')!.innerHTML = '<span style="color:#f38ba8">查询失败</span>';
     });
 
+  // 获取上下文句子：优先取高亮词所在的段落，fallback 到整个高亮区域的父容器
+  const getSentenceContext = (maxLen: number): string => {
+    // 找包含高亮词的最近段落级元素
+    const container = span.closest('p, li, td, h1, h2, h3, h4, h5, blockquote, article, section, div');
+    if (container && container.textContent && container.textContent.trim().length > surface.length) {
+      return container.textContent.trim().slice(0, maxLen);
+    }
+    // fallback: 找周围所有同级高亮词，拼接成句子
+    const parent = span.parentElement;
+    if (parent) {
+      const allText = Array.from(parent.childNodes)
+        .map(n => n.textContent || '')
+        .join('')
+        .trim();
+      if (allText.length > surface.length) return allText.slice(0, maxLen);
+    }
+    return surface;
+  };
+
   // LLM 按钮
   document.getElementById('kky-explain')!.onclick = async () => {
     const llmEl = document.getElementById('kky-llm')!;
@@ -285,24 +304,23 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
     try {
       const res = await Browser.runtime.sendMessage({
         action: 'llm-explain-grammar',
-        sentence: span.closest('p,div,span,li,article,section')?.textContent?.slice(0, 200) || surface,
+        sentence: getSentenceContext(300),
         targetWord: surface,
       }) as any;
       llmEl.innerHTML = `<strong>语法解析</strong><br>${res.explanation || '无结果'}`;
-    } catch { llmEl.textContent = '请求失败'; }
+    } catch (e: any) { llmEl.textContent = '请求失败: ' + (e?.message || e); }
   };
 
   document.getElementById('kky-translate')!.onclick = async () => {
     const llmEl = document.getElementById('kky-llm')!;
     llmEl.textContent = '🌐 翻译中…';
-    const sentence = span.closest('p,div,span,li,article,section')?.textContent?.slice(0, 300) || surface;
     try {
       const res = await Browser.runtime.sendMessage({
         action: 'llm-translate',
-        sentence,
+        sentence: getSentenceContext(400),
       }) as any;
       llmEl.innerHTML = `<strong>翻译</strong><br>${res.translation || ''}<br><span style="color:#a6adc8;font-size:12px">${res.breakdown || ''}</span>`;
-    } catch { llmEl.textContent = '请求失败'; }
+    } catch (e: any) { llmEl.textContent = '请求失败: ' + (e?.message || e); }
   };
 }
 

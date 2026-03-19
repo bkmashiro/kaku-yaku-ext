@@ -27,7 +27,7 @@ export default defineConfig({
 
   build: {
     watch: IS_DEV ? {} : undefined,
-    sourcemap: IS_DEV ? "inline" : false,
+    sourcemap: (IS_DEV || process.env.WITH_SOURCEMAP) ? "inline" : false,
     rollupOptions: {
       input: {
         setup: resolve(__dirname, "src/ui/setup/index.html"),
