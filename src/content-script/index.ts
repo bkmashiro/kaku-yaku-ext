@@ -94,8 +94,41 @@ const highlightTextWithTokens = (text: string, tokens: TokenData[]): number => {
     // 创建包含所有高亮token的文档片段
     const fragment = document.createDocumentFragment();
     
-    // 遍历所有tokens，分别创建高亮元素
-    tokens.forEach(token => {
+    // 合并相邻的「名詞/サ変接続 + する/した/して/します」为一个suru-verb span
+    const mergedTokens: TokenData[] = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const cur = tokens[i];
+      const next = tokens[i + 1];
+      // サ変接続名詞 + する系动词 → 合并
+      if (
+        cur.pos?.includes('名詞') &&
+        next &&
+        next.pos?.includes('動詞') &&
+        (next as any).dictionaryForm === 'する'
+      ) {
+        // 继续合并后面的助动词链（した、します、している等）
+        let combined = cur.surface + next.surface;
+        let combinedReading = (cur.reading || cur.surface) + (next.reading || next.surface);
+        let j = i + 2;
+        while (j < tokens.length && tokens[j].pos?.includes('助動詞')) {
+          combined += tokens[j].surface;
+          combinedReading += tokens[j].reading || tokens[j].surface;
+          j++;
+        }
+        mergedTokens.push({
+          surface: combined,
+          reading: combinedReading,
+          dictionaryForm: cur.surface + 'する',
+          pos: '動詞', // 整体是动词
+        });
+        i = j - 1; // 跳过已合并的
+      } else {
+        mergedTokens.push(cur);
+      }
+    }
+
+    // 遍历合并后的tokens，分别创建高亮元素
+    mergedTokens.forEach(token => {
       const normalizedPos = normalizePos(token.pos);
       const surface = token.surface;
       
@@ -107,7 +140,7 @@ const highlightTextWithTokens = (text: string, tokens: TokenData[]): number => {
         span.textContent = surface;
         span.dataset.surface = surface;
         span.dataset.reading = token.reading || '';
-        span.dataset.dictForm = token.dictionaryForm || surface;
+        span.dataset.dictForm = (token as any).dictionaryForm || surface;
         span.dataset.pos = normalizedPos;
         span.style.cursor = 'pointer';
         
