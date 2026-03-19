@@ -245,6 +245,9 @@ const highlightText = (text: string, wordType: string): number => {
   }
 };
 
+// ── LLM 缓存（按段落文本缓存，跨词共享） ─────────────────────────────────────
+const llmCache = new Map<string, { grammar?: any; translation?: any }>();
+
 // ── Hover Popup ──────────────────────────────────────────────────────────────
 
 function createPopup(): HTMLElement {
@@ -254,16 +257,22 @@ function createPopup(): HTMLElement {
   const popup = document.createElement('div');
   popup.id = 'kaku-yaku-popup';
   popup.innerHTML = `
-    <div id="kky-surface" style="font-size:20px;font-weight:bold;margin-bottom:4px;"></div>
-    <div id="kky-reading" style="color:#89b4fa;margin-bottom:4px;font-size:15px;"></div>
-    <div id="kky-pos" style="font-size:11px;color:#a6e3a1;margin-bottom:10px;"></div>
-    <div id="kky-meanings" style="line-height:1.7;"></div>
-    <div id="kky-examples" style="margin-top:10px;font-size:12px;color:#cba6f7;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;"></div>
-    <div id="kky-jlpt" style="margin-top:6px;font-size:11px;color:#f38ba8;"></div>
-    <div id="kky-llm" style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;"></div>
-    <button id="kky-close" style="position:absolute;top:8px;right:10px;background:none;border:none;color:#6c7086;cursor:pointer;font-size:18px;line-height:1;">✕</button>
-    <button id="kky-explain" style="margin-top:10px;background:#313244;border:none;color:#cdd6f4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;">✨ 解释语法</button>
-    <button id="kky-translate" style="margin-top:10px;margin-left:6px;background:#313244;border:none;color:#cdd6f4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;">🌐 翻译句子</button>
+    <div id="kky-header" style="margin-bottom:6px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+      <span id="kky-surface" style="font-size:20px;font-weight:bold"></span>
+      <span id="kky-reading" style="color:#89b4fa;font-size:14px"></span>
+    </div>
+    <div id="kky-meta" style="margin-bottom:10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <span id="kky-pos" style="font-size:11px;color:#a6e3a1;background:rgba(166,227,161,0.15);padding:2px 8px;border-radius:10px"></span>
+      <span id="kky-jlpt" style="font-size:11px;color:#f38ba8;background:rgba(243,139,168,0.15);padding:2px 8px;border-radius:10px"></span>
+    </div>
+    <div id="kky-meanings" style="line-height:1.7"></div>
+    <div id="kky-examples" style="margin-top:8px;font-size:12px;color:#cba6f7"></div>
+    <div id="kky-llm" style="margin-top:8px"></div>
+    <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
+      <button id="kky-explain" style="background:#313244;border:none;color:#cdd6f4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">✨ 解释语法</button>
+      <button id="kky-translate" style="background:#313244;border:none;color:#cdd6f4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">🌐 翻译</button>
+      <button id="kky-close" style="margin-left:auto;background:none;border:none;color:#6c7086;cursor:pointer;font-size:18px;line-height:1">✕</button>
+    </div>
   `;
   Object.assign(popup.style, {
     display: 'none',
@@ -354,76 +363,117 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
         document.getElementById('kky-examples')!.textContent = `例: ${ex.text}`;
       }
 
-      // JLPT
+      // JLPT badge — show as "N3" not "JLPT N3"
       const jlpt = first.jmdict?.[0]?.jlpt;
       if (jlpt) {
-        document.getElementById('kky-jlpt')!.textContent = `JLPT ${jlpt}`;
+        const jlptVal = String(jlpt).replace(/^JLPT\s*/i, '');
+        document.getElementById('kky-jlpt')!.textContent = jlptVal;
       }
     })
     .catch(() => {
       document.getElementById('kky-meanings')!.innerHTML = '<span style="color:#f38ba8">查询失败</span>';
     });
 
-  // 获取上下文句子：优先取高亮词所在的段落，fallback 到整个高亮区域的父容器
+  // 获取段落文本（用作缓存key）
   const getSentenceContext = (maxLen: number): string => {
-    // 找包含高亮词的最近段落级元素
     const container = span.closest('p, li, td, h1, h2, h3, h4, h5, blockquote, article, section, div');
     if (container && container.textContent && container.textContent.trim().length > surface.length) {
       return container.textContent.trim().slice(0, maxLen);
     }
-    // fallback: 找周围所有同级高亮词，拼接成句子
     const parent = span.parentElement;
     if (parent) {
-      const allText = Array.from(parent.childNodes)
-        .map(n => n.textContent || '')
-        .join('')
-        .trim();
+      const allText = Array.from(parent.childNodes).map(n => n.textContent || '').join('').trim();
       if (allText.length > surface.length) return allText.slice(0, maxLen);
     }
     return surface;
   };
 
-  // LLM 按钮
-  document.getElementById('kky-explain')!.onclick = async () => {
+  // 获取当前词所在的句子（翻译用，更精确）
+  const getLocalSentence = (): string => {
+    const ctx = getSentenceContext(500);
+    const parts = ctx.split(/(?<=[。！？])|(?=\n)/);
+    const containing = parts.find(s => s.includes(surface) || s.includes(dictForm));
+    return (containing || ctx).trim().slice(0, 200);
+  };
+
+  const cacheKey = getSentenceContext(300);
+
+  // 渲染 grammar 结果
+  const renderGrammar = (res: any) => {
     const llmEl = document.getElementById('kky-llm')!;
-    llmEl.innerHTML = '<span style="color:#6c7086">✨ 解释中…</span>';
+    llmEl.innerHTML = `
+      <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:8px">
+        <div style="color:#89dceb;font-size:11px;font-weight:600;margin-bottom:6px">✨ 语法解析 · <em>${surface}</em></div>
+        ${res.role ? `<div style="margin-bottom:4px"><span style="color:#a6e3a1;font-size:11px">词性</span>  ${res.role}</div>` : ''}
+        ${res.function ? `<div style="margin-bottom:4px"><span style="color:#a6e3a1;font-size:11px">作用</span>  ${res.function}</div>` : ''}
+        ${res.rule ? `<div style="margin-bottom:4px;color:#cba6f7;font-size:12px">💡 ${res.rule}</div>` : ''}
+        ${res.example ? `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px">${res.example}<br><span style="color:#a6adc8">${res.exampleTrans || ''}</span></div>` : ''}
+      </div>`.trim();
+  };
+
+  // 渲染 translation 结果
+  const renderTranslation = (res: any) => {
+    const llmEl = document.getElementById('kky-llm')!;
+    const chunksHtml = (res.chunks || [])
+      .map((c: any) => `<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 6px;background:rgba(255,255,255,0.08);border-radius:4px;font-size:11px"><span style="color:#89b4fa">${c.jp}</span> <span style="color:#a6adc8">${c.en}</span></span>`)
+      .join('');
+    llmEl.innerHTML = `
+      <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:8px">
+        <div style="color:#89dceb;font-size:11px;font-weight:600;margin-bottom:6px">🌐 翻译</div>
+        <div style="margin-bottom:8px;font-size:13px">${res.translation || ''}</div>
+        ${chunksHtml ? `<div>${chunksHtml}</div>` : ''}
+      </div>`.trim();
+  };
+
+  let grammarShown = false;
+  let translateShown = false;
+  const explainBtn = document.getElementById('kky-explain')!;
+  const translateBtn = document.getElementById('kky-translate')!;
+  const llmEl = document.getElementById('kky-llm')!;
+
+  const resetLlm = () => { llmEl.innerHTML = ''; grammarShown = false; translateShown = false; };
+
+  explainBtn.onclick = async () => {
+    if (grammarShown) { resetLlm(); explainBtn.textContent = '✨ 解释语法'; return; }
+    translateShown = false; translateBtn.textContent = '🌐 翻译';
+    // 检查缓存
+    const cached = llmCache.get(cacheKey)?.grammar;
+    if (cached) { renderGrammar(cached); grammarShown = true; explainBtn.textContent = '✅ 语法解析'; return; }
+    explainBtn.textContent = '⏳ 解释中…';
     try {
+      const lang = await Browser.storage.local.get('kakuyaku').then((d: any) => d?.kakuyaku?.explanationLang || 'English');
       const res = await Browser.runtime.sendMessage({
         action: 'llm-explain-grammar',
         sentence: getSentenceContext(300),
         targetWord: surface,
+        lang,
       }) as any;
-      // res: { role, function, rule, example, exampleTrans }
-      llmEl.innerHTML = `
-        <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;margin-top:4px;">
-          <div style="color:#89dceb;font-size:11px;font-weight:600;margin-bottom:6px;">✨ 语法解析 · <em>${surface}</em></div>
-          ${res.role ? `<div style="margin-bottom:4px"><span style="color:#a6e3a1;font-size:11px">词性</span> ${res.role}</div>` : ''}
-          ${res.function ? `<div style="margin-bottom:4px"><span style="color:#a6e3a1;font-size:11px">作用</span> ${res.function}</div>` : ''}
-          ${res.rule ? `<div style="margin-bottom:4px;color:#cba6f7;font-size:12px">💡 ${res.rule}</div>` : ''}
-          ${res.example ? `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px">${res.example}<br><span style="color:#a6adc8">${res.exampleTrans || ''}</span></div>` : ''}
-        </div>`.trim();
-    } catch (e: any) { llmEl.textContent = '请求失败: ' + (e?.message || e); }
+      if (!llmCache.has(cacheKey)) llmCache.set(cacheKey, {});
+      llmCache.get(cacheKey)!.grammar = res;
+      renderGrammar(res);
+      grammarShown = true;
+      explainBtn.textContent = '✅ 语法解析';
+    } catch (e: any) { llmEl.textContent = '请求失败: ' + (e?.message || e); explainBtn.textContent = '✨ 解释语法'; }
   };
 
-  document.getElementById('kky-translate')!.onclick = async () => {
-    const llmEl = document.getElementById('kky-llm')!;
-    llmEl.innerHTML = '<span style="color:#6c7086">🌐 翻译中…</span>';
+  translateBtn.onclick = async () => {
+    if (translateShown) { resetLlm(); translateBtn.textContent = '🌐 翻译'; return; }
+    grammarShown = false; explainBtn.textContent = '✨ 解释语法';
+    // 检查缓存
+    const cached = llmCache.get(cacheKey)?.translation;
+    if (cached) { renderTranslation(cached); translateShown = true; translateBtn.textContent = '✅ 翻译'; return; }
+    translateBtn.textContent = '⏳ 翻译中…';
     try {
       const res = await Browser.runtime.sendMessage({
         action: 'llm-translate',
-        sentence: getSentenceContext(400),
+        sentence: getLocalSentence(),
       }) as any;
-      // res: { translation, chunks: [{jp, en}] }
-      const chunksHtml = (res.chunks || [])
-        .map((c: any) => `<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 6px;background:rgba(255,255,255,0.08);border-radius:4px;font-size:11px"><span style="color:#89b4fa">${c.jp}</span> <span style="color:#a6adc8">${c.en}</span></span>`)
-        .join('');
-      llmEl.innerHTML = `
-        <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;margin-top:4px;">
-          <div style="color:#89dceb;font-size:11px;font-weight:600;margin-bottom:6px;">🌐 翻译</div>
-          <div style="margin-bottom:8px;font-size:13px">${res.translation || ''}</div>
-          ${chunksHtml ? `<div style="margin-top:4px">${chunksHtml}</div>` : ''}
-        </div>`.trim();
-    } catch (e: any) { llmEl.textContent = '请求失败: ' + (e?.message || e); }
+      if (!llmCache.has(cacheKey)) llmCache.set(cacheKey, {});
+      llmCache.get(cacheKey)!.translation = res;
+      renderTranslation(res);
+      translateShown = true;
+      translateBtn.textContent = '✅ 翻译';
+    } catch (e: any) { llmEl.textContent = '请求失败: ' + (e?.message || e); translateBtn.textContent = '🌐 翻译'; }
   };
 }
 

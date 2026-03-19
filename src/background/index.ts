@@ -77,7 +77,7 @@ Browser.runtime.onMessage.addListener((
     return fetch(`${API_BASE}/llm/explain-grammar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sentence: m.sentence, targetWord: m.targetWord }),
+      body: JSON.stringify({ sentence: m.sentence, targetWord: m.targetWord, lang: m.lang || 'English' }),
     }).then(r => {
       if (!r.ok) { console.error('llm-explain-grammar API error:', r.status); return { explanation: `API错误 ${r.status}` }; }
       return r.json();

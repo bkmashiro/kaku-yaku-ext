@@ -17,10 +17,17 @@ export const useOptionsStore = defineStore("options", () => {
     counter: 0,
   })
 
+  const { data: kakuYaku } = useBrowserLocalStorage<{
+    explanationLang: string
+  }>("kakuyaku", {
+    explanationLang: "English",
+  })
+
   return {
     isDark,
     toggleDark,
     profile,
     others,
+    kakuYaku,
   }
 })

@@ -1,7 +1,16 @@
 <script setup lang="ts">
 const optionsStore = useOptionsStore()
-// const { toggleDark } = optionsStore
-const { isDark, profile, others } = storeToRefs(optionsStore)
+const { isDark, profile, others, kakuYaku } = storeToRefs(optionsStore)
+
+const LANG_OPTIONS = [
+  { value: 'English', label: 'English' },
+  { value: '中文', label: '中文 (Chinese)' },
+  { value: '日本語', label: '日本語 (Japanese)' },
+  { value: '한국어', label: '한국어 (Korean)' },
+  { value: 'Français', label: 'Français (French)' },
+  { value: 'Deutsch', label: 'Deutsch (German)' },
+  { value: 'Español', label: 'Español (Spanish)' },
+]
 </script>
 
 <template>
@@ -50,11 +59,17 @@ const { isDark, profile, others } = storeToRefs(optionsStore)
         ></UInput>
       </UFormField>
 
-      <p>
-        * You can also make this a compoenent and then able to use this in any
-        context like Popup, Developer Tools UI etc
-      </p>
-      <p>Feel free to change groups or options as per your requirements.</p>
+      <h3>KakuYaku 设置</h3>
+      <p>日语解析插件相关设置。</p>
+
+      <UFormField label="语法解释语言" description="AI 语法解析和翻译将使用此语言输出">
+        <USelect
+          v-model="kakuYaku.explanationLang"
+          :options="LANG_OPTIONS"
+          value-attribute="value"
+          option-attribute="label"
+        />
+      </UFormField>
     </UForm>
   </div>
 </template>
