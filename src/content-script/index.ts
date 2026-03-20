@@ -510,14 +510,10 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
   // 渲染 translation 结果
   const renderTranslation = (res: any) => {
     const llmEl = document.getElementById('kky-llm')!;
-    const chunksHtml = (res.chunks || [])
-      .map((c: any) => `<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 6px;background:rgba(255,255,255,0.08);border-radius:4px;font-size:11px"><span style="color:#89b4fa">${c.jp}</span> <span style="color:#a6adc8">${c.en}</span></span>`)
-      .join('');
     llmEl.innerHTML = `
       <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:8px">
         <div style="color:#89dceb;font-size:11px;font-weight:600;margin-bottom:6px">🌐 翻译</div>
-        <div style="margin-bottom:8px;font-size:13px">${res.translation || ''}</div>
-        ${chunksHtml ? `<div>${chunksHtml}</div>` : ''}
+        <div style="font-size:13px;line-height:1.6">${res.translation || ''}</div>
       </div>`.trim();
   };
 
@@ -570,10 +566,11 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
     if (cached) { renderTranslation(cached); translateShown = true; translateBtn.textContent = '✅ 翻译'; return; }
     translateBtn.textContent = '⏳ 翻译中…';
     try {
+      const lang = await Browser.storage.sync.get('kakuyaku-settings').then((d: any) => d?.['kakuyaku-settings']?.explanationLang || 'English');
       const res = await Browser.runtime.sendMessage({
         action: 'llm-translate',
         sentence: getLocalSentence(),
-        lang: kkSettings.explanationLang,
+        lang,
       }) as any;
       if (!llmCache.has(cacheKey)) llmCache.set(cacheKey, {});
       llmCache.get(cacheKey)!.translation = res;
