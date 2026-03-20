@@ -567,6 +567,7 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
       const res = await Browser.runtime.sendMessage({
         action: 'llm-translate',
         sentence: getLocalSentence(),
+        lang: kkSettings.explanationLang,
       }) as any;
       if (!llmCache.has(cacheKey)) llmCache.set(cacheKey, {});
       llmCache.get(cacheKey)!.translation = res;

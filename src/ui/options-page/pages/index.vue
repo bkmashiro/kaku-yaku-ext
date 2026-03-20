@@ -13,9 +13,27 @@ const LANG_OPTIONS = [
 ]
 
 const FURIGANA_MODE_OPTIONS = [
-  { value: 'hover', label: 'ホバー時表示 (Hover)' },
-  { value: 'always', label: '常に表示 (Always)' },
+  { value: 'hover', label: '悬停显示 (Hover)' },
+  { value: 'always', label: '始终显示 (Always)' },
 ]
+
+// 用 computed writable 确保嵌套属性响应式写入
+const explanationLang = computed({
+  get: () => kkSettings.value.explanationLang,
+  set: (v) => { kkSettings.value = { ...kkSettings.value, explanationLang: v } },
+})
+const furigana = computed({
+  get: () => kkSettings.value.furigana,
+  set: (v) => { kkSettings.value = { ...kkSettings.value, furigana: v } },
+})
+const furiganaMode = computed({
+  get: () => kkSettings.value.furiganaMode,
+  set: (v) => { kkSettings.value = { ...kkSettings.value, furiganaMode: v } },
+})
+const showCacheIndicator = computed({
+  get: () => kkSettings.value.showCacheIndicator,
+  set: (v) => { kkSettings.value = { ...kkSettings.value, showCacheIndicator: v } },
+})
 </script>
 
 <template>
@@ -68,29 +86,23 @@ const FURIGANA_MODE_OPTIONS = [
       <p>日语解析插件相关设置。</p>
 
       <UFormField label="语法解释语言" description="AI 语法解析和翻译将使用此语言输出">
-        <USelect
-          v-model="kkSettings.explanationLang"
-          :options="LANG_OPTIONS"
-          value-attribute="value"
-          option-attribute="label"
-        />
+        <select v-model="explanationLang" class="w-full rounded-md border border-base-300 bg-base-100 px-3 py-2 text-sm">
+          <option v-for="opt in LANG_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
       </UFormField>
 
       <UFormField label="振り仮名 (Furigana)" description="在高亮词上方显示读音">
-        <USwitch v-model="kkSettings.furigana" />
+        <USwitch v-model="furigana" />
       </UFormField>
 
-      <UFormField v-if="kkSettings.furigana" label="振り仮名表示モード" description="选择何时显示振り仮名">
-        <USelect
-          v-model="kkSettings.furiganaMode"
-          :options="FURIGANA_MODE_OPTIONS"
-          value-attribute="value"
-          option-attribute="label"
-        />
+      <UFormField v-if="furigana" label="振り仮名表示モード" description="选择何时显示振り仮名">
+        <select v-model="furiganaMode" class="w-full rounded-md border border-base-300 bg-base-100 px-3 py-2 text-sm">
+          <option v-for="opt in FURIGANA_MODE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
       </UFormField>
 
       <UFormField label="缓存指示器" description="已缓存 LLM 结果的段落显示左侧蓝色边框">
-        <USwitch v-model="kkSettings.showCacheIndicator" />
+        <USwitch v-model="showCacheIndicator" />
       </UFormField>
     </UForm>
   </div>

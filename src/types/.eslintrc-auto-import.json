@@ -27,6 +27,7 @@
     "UseComponentIconsProps": true,
     "UseFileUploadOptions": true,
     "VNode": true,
+    "VocabEntry": true,
     "WritableComputedRef": true,
     "acceptHMRUpdate": true,
     "appRouter": true,

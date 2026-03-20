@@ -90,7 +90,7 @@ Browser.runtime.onMessage.addListener((
     return fetch(`${API_BASE}/llm/translate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sentence: m.sentence }),
+      body: JSON.stringify({ sentence: m.sentence, lang: m.lang || 'English' }),
     }).then(r => {
       if (!r.ok) { console.error('llm-translate API error:', r.status); return { translation: `API错误 ${r.status}`, breakdown: '' }; }
       return r.json();
