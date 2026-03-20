@@ -48,6 +48,30 @@ function cycleStatus(entry: VocabEntry) {
 function deleteEntry(id: string) {
   vocabulary.value = vocabulary.value.filter(v => v.id !== id)
 }
+
+function exportTSV() {
+  const headers = ['surface', 'reading', 'meanings', 'example', 'exampleTrans', 'jlpt', 'status', 'addedAt']
+  const rows = vocabulary.value.map(e => [
+    e.surface,
+    e.reading,
+    (e.meanings || []).join('|'),
+    e.example || '',
+    e.exampleTrans || '',
+    e.jlpt || '',
+    e.status,
+    new Date(e.addedAt).toISOString(),
+  ].map(v => String(v).replace(/\t/g, ' ')).join('\t'))
+  const tsv = [headers.join('\t'), ...rows].join('\n')
+  const blob = new Blob([tsv], { type: 'text/tab-separated-values;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const date = new Date()
+  const yyyymmdd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `kaku-yaku-vocab-${yyyymmdd}.tsv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <template>
@@ -65,6 +89,17 @@ function deleteEntry(id: string) {
         {{ tab }}
         <span v-if="tab === '全部'" style="margin-left:4px;font-size:11px;opacity:0.7">{{ vocabulary.length }}</span>
         <span v-else style="margin-left:4px;font-size:11px;opacity:0.7">{{ vocabulary.filter(v => v.status === statusMap[tab]).length }}</span>
+      </button>
+    </div>
+
+    <!-- Export button -->
+    <div style="margin-bottom:12px;text-align:right">
+      <button
+        :disabled="vocabulary.length === 0"
+        :style="`background:${vocabulary.length === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(137,180,250,0.15)'};border:1px solid ${vocabulary.length === 0 ? 'rgba(255,255,255,0.1)' : '#89b4fa'};color:${vocabulary.length === 0 ? '#585b70' : '#89b4fa'};padding:4px 12px;border-radius:16px;cursor:${vocabulary.length === 0 ? 'not-allowed' : 'pointer'};font-size:12px`"
+        @click="exportTSV"
+      >
+        📥 导出全部 TSV<span style="margin-left:4px;opacity:0.7">({{ vocabulary.length }})</span>
       </button>
     </div>
 
