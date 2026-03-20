@@ -359,10 +359,14 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
   // 清空旧内容
   document.getElementById('kky-surface')!.textContent = surface;
   document.getElementById('kky-reading')!.textContent = reading !== surface ? reading : '';
-  document.getElementById('kky-pos')!.textContent = pos;
+  const posEl = document.getElementById('kky-pos')!;
+  posEl.textContent = pos;
+  posEl.style.display = pos ? '' : 'none';
   document.getElementById('kky-meanings')!.innerHTML = '<span style="color:#6c7086">查询中…</span>';
   document.getElementById('kky-examples')!.textContent = '';
-  document.getElementById('kky-jlpt')!.textContent = '';
+  const jlptEl = document.getElementById('kky-jlpt')!;
+  jlptEl.textContent = '';
+  jlptEl.style.display = 'none';
   document.getElementById('kky-llm')!.textContent = '';
 
   // 定位 — absolute 跟随文档，吸附在点击词色块正下方
@@ -424,7 +428,9 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
       const jlpt = first.jmdict?.[0]?.jlpt;
       if (jlpt) {
         jlptValue = String(jlpt).replace(/^JLPT\s*/i, '');
-        document.getElementById('kky-jlpt')!.textContent = jlptValue;
+        const jEl = document.getElementById('kky-jlpt')!;
+        jEl.textContent = jlptValue;
+        jEl.style.display = '';
       }
 
       // Wire save button after data loaded
