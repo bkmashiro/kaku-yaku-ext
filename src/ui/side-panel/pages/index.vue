@@ -2,7 +2,7 @@
 import type { VocabEntry } from '~/stores/options.store'
 
 const optionsStore = useOptionsStore()
-const { vocabulary } = storeToRefs(optionsStore)
+const { vocabulary, lookupHistory } = storeToRefs(optionsStore)
 
 type FilterTab = '全部' | '新词' | '学习中' | '已掌握'
 const activeTab = ref<FilterTab>('全部')
@@ -16,10 +16,33 @@ const statusMap: Record<FilterTab, VocabEntry['status'] | null> = {
   '已掌握': 'known',
 }
 
+type SortOption = 'addedAt' | 'lookupCount' | 'status'
+const sortBy = ref<SortOption>('addedAt')
+
+const sortOptions: { value: SortOption; label: string }[] = [
+  { value: 'addedAt', label: '按添加时间' },
+  { value: 'lookupCount', label: '按查词频率' },
+  { value: 'status', label: '按学习状态' },
+]
+
+const statusOrder: Record<VocabEntry['status'], number> = {
+  new: 0,
+  learning: 1,
+  known: 2,
+}
+
 const filtered = computed(() => {
   const s = statusMap[activeTab.value]
-  if (!s) return vocabulary.value
-  return vocabulary.value.filter(v => v.status === s)
+  let list = s ? vocabulary.value.filter(v => v.status === s) : [...vocabulary.value]
+  const history = lookupHistory.value || {}
+  if (sortBy.value === 'lookupCount') {
+    list = list.slice().sort((a, b) => (history[b.surface] || 0) - (history[a.surface] || 0))
+  } else if (sortBy.value === 'status') {
+    list = list.slice().sort((a, b) => statusOrder[a.status] - statusOrder[b.status])
+  } else {
+    list = list.slice().sort((a, b) => b.addedAt - a.addedAt)
+  }
+  return list
 })
 
 const statusLabel: Record<VocabEntry['status'], string> = {
@@ -249,6 +272,17 @@ function nextCard() {
         </button>
       </div>
 
+      <!-- Sort options -->
+      <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:#6c7086;white-space:nowrap">排序：</span>
+        <select
+          v-model="sortBy"
+          style="background:#313244;border:1px solid rgba(255,255,255,0.12);color:#cdd6f4;padding:4px 8px;border-radius:8px;font-size:12px;cursor:pointer;flex:1"
+        >
+          <option v-for="opt in sortOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
+      </div>
+
       <!-- Export button -->
       <div style="margin-bottom:12px;text-align:right">
         <button
@@ -288,6 +322,7 @@ function nextCard() {
             {{ statusLabel[entry.status] }}
           </button>
           <span style="font-size:11px;color:#585b70;margin-left:2px">复习 {{ entry.reviewCount }} 次</span>
+          <span v-if="lookupHistory[entry.surface] && lookupHistory[entry.surface] > 0" style="font-size:11px;color:#45475a;margin-left:4px">查词 {{ lookupHistory[entry.surface] }} 次</span>
           <button
             style="margin-left:auto;background:none;border:none;color:#585b70;cursor:pointer;font-size:14px;padding:2px 4px"
             title="删除"

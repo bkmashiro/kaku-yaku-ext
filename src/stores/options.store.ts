@@ -46,6 +46,8 @@ export const useOptionsStore = defineStore("options", () => {
 
   const { data: vocabulary } = useBrowserLocalStorage<VocabEntry[]>("kakuyaku-vocab", [])
 
+  const { data: lookupHistory } = useBrowserLocalStorage<Record<string, number>>("kakuyaku-lookup-history", {} as Record<string, number>)
+
   return {
     isDark,
     toggleDark,
@@ -53,5 +55,6 @@ export const useOptionsStore = defineStore("options", () => {
     others,
     kkSettings,
     vocabulary,
+    lookupHistory,
   }
 })

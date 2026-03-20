@@ -313,6 +313,7 @@ function createPopup(): HTMLElement {
       <button id="kky-close" style="margin-left:auto;background:none;border:none;color:#6c7086;cursor:pointer;font-size:18px;line-height:1">✕</button>
     </div>
     <div id="kky-toast" style="display:none;margin-top:8px;text-align:center;font-size:12px;color:#a6e3a1;background:rgba(166,227,161,0.12);border-radius:6px;padding:4px 8px">已复制到剪贴板 ✓</div>
+    <div id="kky-lookup-count" style="display:none;margin-top:6px;text-align:right;font-size:11px;color:#585b70"></div>
   `;
   Object.assign(popup.style, {
     display: 'none',
@@ -370,6 +371,21 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
   jlptEl.textContent = '';
   jlptEl.style.display = 'none';
   document.getElementById('kky-llm')!.textContent = '';
+
+  // 更新查词次数
+  const lookupCountEl = document.getElementById('kky-lookup-count')!;
+  lookupCountEl.style.display = 'none';
+  Browser.storage.local.get('kakuyaku-lookup-history').then((d: any) => {
+    const history: Record<string, number> = d?.['kakuyaku-lookup-history'] || {};
+    const prev = history[surface] || 0;
+    const next = prev + 1;
+    history[surface] = next;
+    Browser.storage.local.set({ 'kakuyaku-lookup-history': history });
+    if (next > 1) {
+      lookupCountEl.textContent = `已查 ${next} 次`;
+      lookupCountEl.style.display = '';
+    }
+  });
 
   // 定位 — absolute 跟随文档，吸附在点击词色块正下方
   const POPUP_W = 340;
