@@ -500,7 +500,7 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
     llmEl.innerHTML = `
       <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:8px">
         <div style="color:#89dceb;font-size:11px;font-weight:600;margin-bottom:6px">✨ 语法解析 · <em>${surface}</em></div>
-        ${res.role ? `<div style="margin-bottom:4px"><span style="color:#a6e3a1;font-size:11px">词性</span>  ${res.role}</div>` : ''}
+        ${res.role ? `<div style="margin-bottom:4px"><span style="color:#a6e3a1;font-size:11px">词性</span>  ${String(res.role).slice(0, 60)}</div>` : ''}
         ${res.function ? `<div style="margin-bottom:4px"><span style="color:#a6e3a1;font-size:11px">作用</span>  ${res.function}</div>` : ''}
         ${res.rule ? `<div style="margin-bottom:4px;color:#cba6f7;font-size:12px">💡 ${res.rule}</div>` : ''}
         ${res.example ? `<div style="margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px">${res.example}<br><span style="color:#a6adc8">${res.exampleTrans || ''}</span></div>` : ''}
