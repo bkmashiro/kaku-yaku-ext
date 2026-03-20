@@ -309,8 +309,10 @@ function createPopup(): HTMLElement {
       <button id="kky-explain" style="background:#313244;border:none;color:#cdd6f4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">✨ 解释语法</button>
       <button id="kky-translate" style="background:#313244;border:none;color:#cdd6f4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">🌐 翻译</button>
       <button id="kky-save" style="background:#313244;border:none;color:#cdd6f4;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">＋ 生词本</button>
+      <button id="kky-anki" style="display:none;background:#313244;border:none;color:#cba6f7;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px" title="复制 Anki TSV 到剪贴板">📤 Anki</button>
       <button id="kky-close" style="margin-left:auto;background:none;border:none;color:#6c7086;cursor:pointer;font-size:18px;line-height:1">✕</button>
     </div>
+    <div id="kky-toast" style="display:none;margin-top:8px;text-align:center;font-size:12px;color:#a6e3a1;background:rgba(166,227,161,0.12);border-radius:6px;padding:4px 8px">已复制到剪贴板 ✓</div>
   `;
   Object.assign(popup.style, {
     display: 'none',
@@ -385,14 +387,48 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
   const saveBtn = document.getElementById('kky-save')!;
   saveBtn.textContent = '＋ 生词本';
   (saveBtn as HTMLButtonElement).style.color = '#cdd6f4';
+  const ankiBtn = document.getElementById('kky-anki') as HTMLButtonElement;
+  ankiBtn.style.display = 'none';
+
+  // Helper: show Anki button for saved entry
+  const showAnkiButton = (entry: any) => {
+    ankiBtn.style.display = '';
+    ankiBtn.onclick = async () => {
+      const tsv = [
+        entry.surface,
+        entry.reading,
+        (entry.meanings as string[]).join('; '),
+        entry.example || '',
+        entry.exampleTrans || '',
+        entry.jlpt || '',
+      ].join('\t');
+      try {
+        await navigator.clipboard.writeText(tsv);
+      } catch {
+        // Fallback: execCommand
+        const ta = document.createElement('textarea');
+        ta.value = tsv;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      const toast = document.getElementById('kky-toast')!;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 1500);
+    };
+  };
 
   // Check if already saved
   Browser.storage.local.get('kakuyaku-vocab').then((d: any) => {
     const vocab: any[] = d?.['kakuyaku-vocab'] || [];
-    const alreadySaved = vocab.some((v: any) => v.surface === surface && v.dictForm === (dictForm || surface));
-    if (alreadySaved) {
+    const saved = vocab.find((v: any) => v.surface === surface && v.dictForm === (dictForm || surface));
+    if (saved) {
       saveBtn.textContent = '✅ 已保存';
       (saveBtn as HTMLButtonElement).style.color = '#a6e3a1';
+      showAnkiButton(saved);
     }
   });
 
@@ -464,6 +500,7 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
         await Browser.storage.local.set({ 'kakuyaku-vocab': vocab });
         saveBtn.textContent = '✅ 已保存';
         (saveBtn as HTMLButtonElement).style.color = '#a6e3a1';
+        showAnkiButton(entry);
       };
     })
     .catch(() => {
