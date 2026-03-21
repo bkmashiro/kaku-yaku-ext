@@ -11,6 +11,10 @@ export interface VocabEntry {
   exampleTrans: string
   status: 'new' | 'learning' | 'known'
   reviewCount: number
+  review_count?: number
+  last_reviewed?: number
+  next_review?: number
+  interval_days?: number
 }
 
 export const useOptionsStore = defineStore("options", () => {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { VocabEntry } from '~/stores/options.store'
+import type { VocabEntry } from 'src/stores/options.store'
 
 const optionsStore = useOptionsStore()
 const { vocabulary, lookupHistory } = storeToRefs(optionsStore)

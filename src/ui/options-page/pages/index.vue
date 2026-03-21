@@ -52,7 +52,7 @@ const showCacheIndicator = computed({
     <h3>User Interface</h3>
     <p>Change application interface settings.</p>
 
-    <UForm class="space-y-4">
+    <UForm :state="{}" class="space-y-4">
       <UFormField label="Theme">
         <USwitch v-model="isDark" />
       </UFormField>

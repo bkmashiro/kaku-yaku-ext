@@ -511,6 +511,10 @@ function showPopup(event: MouseEvent, span: HTMLElement) {
           exampleTrans: '',
           status: 'new',
           reviewCount: 0,
+          review_count: 0,
+          last_reviewed: 0,
+          next_review: Date.now(),
+          interval_days: 1,
         };
         vocab.push(entry);
         await Browser.storage.local.set({ 'kakuyaku-vocab': vocab });
