@@ -1,3 +1,6 @@
+import type { ParsedCsvRow } from 'src/utils/vocab-import'
+import { mergeImportedVocabulary } from 'src/utils/vocab-import'
+
 export interface VocabEntry {
   id: string
   surface: string
@@ -52,6 +55,12 @@ export const useOptionsStore = defineStore("options", () => {
 
   const { data: lookupHistory } = useBrowserLocalStorage<Record<string, number>>("kakuyaku-lookup-history", {} as Record<string, number>)
 
+  function importVocabulary(rows: ParsedCsvRow[]) {
+    const result = mergeImportedVocabulary(vocabulary.value, rows)
+    vocabulary.value = result.merged
+    return result
+  }
+
   return {
     isDark,
     toggleDark,
@@ -60,5 +69,6 @@ export const useOptionsStore = defineStore("options", () => {
     kkSettings,
     vocabulary,
     lookupHistory,
+    importVocabulary,
   }
 })

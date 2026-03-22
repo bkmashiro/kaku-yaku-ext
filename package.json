@@ -89,6 +89,7 @@
     "launch:all": "tsx scripts/launch.ts --all",
     "lint": "eslint . --fix --cache",
     "lint:manifest": "web-ext lint --pretty",
+    "test": "node --import tsx/esm --test src/utils/vocab-import.test.ts",
     "typecheck": "vue-tsc --noEmit"
   },
   "type": "module",
