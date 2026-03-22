@@ -9,8 +9,11 @@ declare global {
   const $t: typeof import('vue-i18n')['$t']
   const EffectScope: typeof import('vue').EffectScope
   const Gumroad: typeof import('../utils/payment/gumroad')['Gumroad']
+  const JLPT_FILTER_OPTIONS: typeof import('../utils/jlpt').JLPT_FILTER_OPTIONS
   const Notification: typeof import('notivue')['Notification']
   const Notivue: typeof import('notivue')['Notivue']
+  const STATUS_FILTER_OPTIONS: typeof import('../utils/vocab-export').STATUS_FILTER_OPTIONS
+  const STATUS_LABELS: typeof import('../utils/vocab-export').STATUS_LABELS
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const addCheckoutSession: typeof import('../utils/firebase')['addCheckoutSession']
   const appRouter: typeof import('../utils/router/index').appRouter
@@ -39,6 +42,7 @@ declare global {
   const createSharedComposable: typeof import('@vueuse/core').createSharedComposable
   const createTemplatePromise: typeof import('@vueuse/core').createTemplatePromise
   const createUnrefFn: typeof import('@vueuse/core').createUnrefFn
+  const createVocabEntryFromCsvRow: typeof import('../utils/vocab-import').createVocabEntryFromCsvRow
   const customRef: typeof import('vue').customRef
   const customersRef: typeof import('../utils/firebase')['customersRef']
   const debouncedRef: typeof import('@vueuse/core').debouncedRef
@@ -49,12 +53,16 @@ declare global {
   const definePage: typeof import('vue-router/auto').definePage
   const defineShortcuts: typeof import('../../node_modules/@nuxt/ui/dist/runtime/composables/defineShortcuts.js').defineShortcuts
   const defineStore: typeof import('pinia').defineStore
+  const downloadFile: typeof import('../utils/vocab-export').downloadFile
   const eagerComputed: typeof import('@vueuse/core').eagerComputed
   const effectScope: typeof import('vue').effectScope
+  const exportToAnki: typeof import('../utils/vocab-export').exportToAnki
+  const exportToCsv: typeof import('../utils/vocab-export').exportToCsv
   const extPay: typeof import('../utils/payment/extPay')['extPay']
   const extendLocale: typeof import('../../node_modules/@nuxt/ui/dist/runtime/composables/defineLocale.js').extendLocale
   const extendRef: typeof import('@vueuse/core').extendRef
   const extractShortcuts: typeof import('../../node_modules/@nuxt/ui/dist/runtime/composables/defineShortcuts.js').extractShortcuts
+  const filterEntries: typeof import('../utils/vocab-export').filterEntries
   const firebaseApp: typeof import('../utils/firebase')['firebaseApp']
   const firebaseConfig: typeof import('../utils/firebase')['firebaseConfig']
   const firestore: typeof import('../utils/firebase')['firestore']
@@ -70,6 +78,7 @@ declare global {
   const getCurrentScope: typeof import('vue').getCurrentScope
   const getCurrentWatcher: typeof import('vue').getCurrentWatcher
   const getCustomerPortalLink: typeof import('../utils/firebase')['getCustomerPortalLink']
+  const getEntryJlptLevel: typeof import('../utils/jlpt').getEntryJlptLevel
   const getProductsAndPrices: typeof import('../utils/firebase')['getProductsAndPrices']
   const getSubscription: typeof import('../utils/firebase')['getSubscription']
   const h: typeof import('vue').h
@@ -93,8 +102,11 @@ declare global {
   const mapStores: typeof import('pinia').mapStores
   const mapWritableState: typeof import('pinia').mapWritableState
   const markRaw: typeof import('vue').markRaw
+  const matchesJlptFilter: typeof import('../utils/jlpt').matchesJlptFilter
+  const mergeImportedVocabulary: typeof import('../utils/vocab-import').mergeImportedVocabulary
   const middleware: typeof import('../utils/router/middleware')['middleware']
   const nextTick: typeof import('vue').nextTick
+  const normalizeJlptLevel: typeof import('../utils/jlpt').normalizeJlptLevel
   const notivue: typeof import('../utils/notifications')['notivue']
   const onActivated: typeof import('vue').onActivated
   const onBeforeMount: typeof import('vue').onBeforeMount
@@ -119,6 +131,7 @@ declare global {
   const onWatcherCleanup: typeof import('vue').onWatcherCleanup
   const openStripeCheckout: typeof import('../utils/payment/stripe')['openStripeCheckout']
   const optionsStore: typeof import('../stores/options.store')['default']
+  const parseVocabularyCsv: typeof import('../utils/vocab-import').parseVocabularyCsv
   const pausableWatch: typeof import('@vueuse/core').pausableWatch
   const pinia: typeof import('../utils/pinia').pinia
   const portalTargetInjectionKey: typeof import('../../node_modules/@nuxt/ui/dist/runtime/composables/usePortal.js').portalTargetInjectionKey
@@ -170,6 +183,7 @@ declare global {
   const toRef: typeof import('vue').toRef
   const toRefs: typeof import('vue').toRefs
   const toValue: typeof import('vue').toValue
+  const triggerExport: typeof import('../utils/vocab-export').triggerExport
   const triggerRef: typeof import('vue').triggerRef
   const tryOnBeforeMount: typeof import('@vueuse/core').tryOnBeforeMount
   const tryOnBeforeUnmount: typeof import('@vueuse/core').tryOnBeforeUnmount
@@ -396,6 +410,15 @@ declare global {
   export type { VocabEntry } from '../stores/options.store'
   import('../stores/options.store')
   // @ts-ignore
+  export type { JlptFilterOption } from '../utils/jlpt'
+  import('../utils/jlpt')
+  // @ts-ignore
+  export type { ExportFormat, StatusFilter, ExportOptions } from '../utils/vocab-export'
+  import('../utils/vocab-export')
+  // @ts-ignore
+  export type { ParsedCsvRow, ParsedCsvResult } from '../utils/vocab-import'
+  import('../utils/vocab-import')
+  // @ts-ignore
   export type { ShortcutConfig, ShortcutsConfig, ShortcutsOptions } from '../../node_modules/@nuxt/ui/dist/runtime/composables/defineShortcuts.d'
   import('../../node_modules/@nuxt/ui/dist/runtime/composables/defineShortcuts.d')
   // @ts-ignore
@@ -421,6 +444,9 @@ declare module 'vue' {
   interface GlobalComponents {}
   interface ComponentCustomProperties {
     readonly EffectScope: UnwrapRef<typeof import('vue')['EffectScope']>
+    readonly JLPT_FILTER_OPTIONS: UnwrapRef<typeof import('../utils/jlpt')['JLPT_FILTER_OPTIONS']>
+    readonly STATUS_FILTER_OPTIONS: UnwrapRef<typeof import('../utils/vocab-export')['STATUS_FILTER_OPTIONS']>
+    readonly STATUS_LABELS: UnwrapRef<typeof import('../utils/vocab-export')['STATUS_LABELS']>
     readonly acceptHMRUpdate: UnwrapRef<typeof import('pinia')['acceptHMRUpdate']>
     readonly appRouter: UnwrapRef<typeof import('../utils/router/index')['appRouter']>
     readonly applyTheme: UnwrapRef<typeof import('../composables/useTheme')['applyTheme']>
@@ -447,6 +473,7 @@ declare module 'vue' {
     readonly createSharedComposable: UnwrapRef<typeof import('@vueuse/core')['createSharedComposable']>
     readonly createTemplatePromise: UnwrapRef<typeof import('@vueuse/core')['createTemplatePromise']>
     readonly createUnrefFn: UnwrapRef<typeof import('@vueuse/core')['createUnrefFn']>
+    readonly createVocabEntryFromCsvRow: UnwrapRef<typeof import('../utils/vocab-import')['createVocabEntryFromCsvRow']>
     readonly customRef: UnwrapRef<typeof import('vue')['customRef']>
     readonly debouncedRef: UnwrapRef<typeof import('@vueuse/core')['debouncedRef']>
     readonly debouncedWatch: UnwrapRef<typeof import('@vueuse/core')['debouncedWatch']>
@@ -456,11 +483,15 @@ declare module 'vue' {
     readonly definePage: UnwrapRef<typeof import('vue-router/auto')['definePage']>
     readonly defineShortcuts: UnwrapRef<typeof import('../../node_modules/@nuxt/ui/dist/runtime/composables/defineShortcuts.js')['defineShortcuts']>
     readonly defineStore: UnwrapRef<typeof import('pinia')['defineStore']>
+    readonly downloadFile: UnwrapRef<typeof import('../utils/vocab-export')['downloadFile']>
     readonly eagerComputed: UnwrapRef<typeof import('@vueuse/core')['eagerComputed']>
     readonly effectScope: UnwrapRef<typeof import('vue')['effectScope']>
+    readonly exportToAnki: UnwrapRef<typeof import('../utils/vocab-export')['exportToAnki']>
+    readonly exportToCsv: UnwrapRef<typeof import('../utils/vocab-export')['exportToCsv']>
     readonly extendLocale: UnwrapRef<typeof import('../../node_modules/@nuxt/ui/dist/runtime/composables/defineLocale.js')['extendLocale']>
     readonly extendRef: UnwrapRef<typeof import('@vueuse/core')['extendRef']>
     readonly extractShortcuts: UnwrapRef<typeof import('../../node_modules/@nuxt/ui/dist/runtime/composables/defineShortcuts.js')['extractShortcuts']>
+    readonly filterEntries: UnwrapRef<typeof import('../utils/vocab-export')['filterEntries']>
     readonly formBusInjectionKey: UnwrapRef<typeof import('../../node_modules/@nuxt/ui/dist/runtime/composables/useFormField.js')['formBusInjectionKey']>
     readonly formErrorsInjectionKey: UnwrapRef<typeof import('../../node_modules/@nuxt/ui/dist/runtime/composables/useFormField.js')['formErrorsInjectionKey']>
     readonly formFieldInjectionKey: UnwrapRef<typeof import('../../node_modules/@nuxt/ui/dist/runtime/composables/useFormField.js')['formFieldInjectionKey']>
@@ -471,6 +502,7 @@ declare module 'vue' {
     readonly getCurrentInstance: UnwrapRef<typeof import('vue')['getCurrentInstance']>
     readonly getCurrentScope: UnwrapRef<typeof import('vue')['getCurrentScope']>
     readonly getCurrentWatcher: UnwrapRef<typeof import('vue')['getCurrentWatcher']>
+    readonly getEntryJlptLevel: UnwrapRef<typeof import('../utils/jlpt')['getEntryJlptLevel']>
     readonly h: UnwrapRef<typeof import('vue')['h']>
     readonly i18n: UnwrapRef<typeof import('../utils/i18n')['i18n']>
     readonly ignorableWatch: UnwrapRef<typeof import('@vueuse/core')['ignorableWatch']>
@@ -492,7 +524,10 @@ declare module 'vue' {
     readonly mapStores: UnwrapRef<typeof import('pinia')['mapStores']>
     readonly mapWritableState: UnwrapRef<typeof import('pinia')['mapWritableState']>
     readonly markRaw: UnwrapRef<typeof import('vue')['markRaw']>
+    readonly matchesJlptFilter: UnwrapRef<typeof import('../utils/jlpt')['matchesJlptFilter']>
+    readonly mergeImportedVocabulary: UnwrapRef<typeof import('../utils/vocab-import')['mergeImportedVocabulary']>
     readonly nextTick: UnwrapRef<typeof import('vue')['nextTick']>
+    readonly normalizeJlptLevel: UnwrapRef<typeof import('../utils/jlpt')['normalizeJlptLevel']>
     readonly onActivated: UnwrapRef<typeof import('vue')['onActivated']>
     readonly onBeforeMount: UnwrapRef<typeof import('vue')['onBeforeMount']>
     readonly onBeforeRouteLeave: UnwrapRef<typeof import('vue-router')['onBeforeRouteLeave']>
@@ -514,6 +549,7 @@ declare module 'vue' {
     readonly onUnmounted: UnwrapRef<typeof import('vue')['onUnmounted']>
     readonly onUpdated: UnwrapRef<typeof import('vue')['onUpdated']>
     readonly onWatcherCleanup: UnwrapRef<typeof import('vue')['onWatcherCleanup']>
+    readonly parseVocabularyCsv: UnwrapRef<typeof import('../utils/vocab-import')['parseVocabularyCsv']>
     readonly pausableWatch: UnwrapRef<typeof import('@vueuse/core')['pausableWatch']>
     readonly pinia: UnwrapRef<typeof import('../utils/pinia')['pinia']>
     readonly portalTargetInjectionKey: UnwrapRef<typeof import('../../node_modules/@nuxt/ui/dist/runtime/composables/usePortal.js')['portalTargetInjectionKey']>
@@ -551,6 +587,7 @@ declare module 'vue' {
     readonly toRef: UnwrapRef<typeof import('vue')['toRef']>
     readonly toRefs: UnwrapRef<typeof import('vue')['toRefs']>
     readonly toValue: UnwrapRef<typeof import('vue')['toValue']>
+    readonly triggerExport: UnwrapRef<typeof import('../utils/vocab-export')['triggerExport']>
     readonly triggerRef: UnwrapRef<typeof import('vue')['triggerRef']>
     readonly tryOnBeforeMount: UnwrapRef<typeof import('@vueuse/core')['tryOnBeforeMount']>
     readonly tryOnBeforeUnmount: UnwrapRef<typeof import('@vueuse/core')['tryOnBeforeUnmount']>

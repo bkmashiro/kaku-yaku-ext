@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { VocabEntry } from "src/stores/options.store"
 import { JLPT_FILTER_OPTIONS, getEntryJlptLevel, matchesJlptFilter, type JlptFilterOption } from "src/utils/jlpt"
+import { STATUS_FILTER_OPTIONS, STATUS_LABELS, triggerExport, filterEntries, type ExportFormat, type StatusFilter } from "src/utils/vocab-export"
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const JLPT_FILTER_STORAGE_KEY = "kakuyaku-popup-jlpt-filter"
@@ -158,6 +159,39 @@ onMounted(() => {
 watch(selectedJlptFilter, (value) => {
   localStorage.setItem(JLPT_FILTER_STORAGE_KEY, value)
 })
+
+// ── Export ──────────────────────────────────────────────────────────────────
+const showExportModal = ref(false)
+const exportFormat = ref<ExportFormat>("csv")
+const exportJlptFilter = ref<JlptFilterOption>("All")
+const exportStatusFilter = ref<StatusFilter>("All")
+
+const exportPreviewCount = computed(() =>
+  filterEntries(vocabulary.value, {
+    jlptFilter: exportJlptFilter.value,
+    statusFilter: exportStatusFilter.value,
+  }).length,
+)
+
+function openExport() {
+  exportJlptFilter.value = selectedJlptFilter.value
+  exportStatusFilter.value = "All"
+  exportFormat.value = "csv"
+  showExportModal.value = true
+}
+
+function closeExport() {
+  showExportModal.value = false
+}
+
+function doExport() {
+  triggerExport(vocabulary.value, {
+    jlptFilter: exportJlptFilter.value,
+    statusFilter: exportStatusFilter.value,
+    format: exportFormat.value,
+  })
+  closeExport()
+}
 </script>
 
 <template>
@@ -189,6 +223,14 @@ watch(selectedJlptFilter, (value) => {
             <strong>{{ dueEntries.length }}</strong>
           </div>
         </div>
+
+        <button
+          class="export-trigger"
+          type="button"
+          @click="openExport"
+        >
+          ↓ 导出词库
+        </button>
 
         <div class="filter-section">
           <div class="filter-header">
@@ -313,6 +355,102 @@ watch(selectedJlptFilter, (value) => {
           </button>
         </div>
       </template>
+    </div>
+
+    <!-- Export Modal -->
+    <div
+      v-if="showExportModal"
+      class="modal-overlay"
+      @click.self="closeExport"
+    >
+      <div class="modal-panel">
+        <div class="modal-header">
+          <h2>导出词库</h2>
+          <button
+            class="ghost-button"
+            type="button"
+            @click="closeExport"
+          >
+            ✕
+          </button>
+        </div>
+
+        <!-- Format -->
+        <div class="modal-section">
+          <p class="modal-label">
+            格式
+          </p>
+          <div class="format-row">
+            <button
+              class="format-chip"
+              :class="{ active: exportFormat === 'csv' }"
+              type="button"
+              @click="exportFormat = 'csv'"
+            >
+              CSV
+            </button>
+            <button
+              class="format-chip"
+              :class="{ active: exportFormat === 'anki' }"
+              type="button"
+              @click="exportFormat = 'anki'"
+            >
+              Anki (.txt)
+            </button>
+          </div>
+        </div>
+
+        <!-- JLPT filter -->
+        <div class="modal-section">
+          <p class="modal-label">
+            JLPT 等级
+          </p>
+          <div class="filter-chips">
+            <button
+              v-for="opt in JLPT_FILTER_OPTIONS"
+              :key="opt"
+              class="filter-chip"
+              :class="{ active: exportJlptFilter === opt }"
+              type="button"
+              @click="exportJlptFilter = opt"
+            >
+              {{ opt }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Status filter -->
+        <div class="modal-section">
+          <p class="modal-label">
+            熟悉度
+          </p>
+          <div class="filter-chips">
+            <button
+              v-for="opt in STATUS_FILTER_OPTIONS"
+              :key="opt"
+              class="filter-chip"
+              :class="{ active: exportStatusFilter === opt }"
+              type="button"
+              @click="exportStatusFilter = opt"
+            >
+              {{ STATUS_LABELS[opt] }}
+            </button>
+          </div>
+        </div>
+
+        <p class="export-preview-count">
+          共 <strong>{{ exportPreviewCount }}</strong> 条词汇将被导出
+        </p>
+
+        <button
+          class="primary-button"
+          type="button"
+          :disabled="exportPreviewCount === 0"
+          @click="doExport"
+        >
+          下载
+        </button>
+      </div>
     </div>
   </section>
 </template>
@@ -610,6 +748,111 @@ h1 {
 .done-card h2 {
   margin: 6px 0 10px;
   font-size: 28px;
+}
+
+.export-trigger {
+  display: block;
+  width: 100%;
+  margin-bottom: 14px;
+  padding: 10px 16px;
+  border: 1px dashed rgba(180, 83, 9, 0.35);
+  border-radius: 14px;
+  background: rgba(255, 248, 235, 0.7);
+  color: #b45309;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.export-trigger:hover {
+  background: rgba(255, 243, 220, 0.95);
+  border-color: rgba(180, 83, 9, 0.55);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(50, 30, 10, 0.4);
+  z-index: 100;
+  backdrop-filter: blur(2px);
+}
+
+.modal-panel {
+  width: calc(100% - 32px);
+  max-width: 360px;
+  padding: 20px;
+  border-radius: 24px;
+  background: #fffcf7;
+  border: 1px solid rgba(120, 53, 15, 0.12);
+  box-shadow: 0 24px 60px rgba(120, 53, 15, 0.18);
+  color: #3f2f1f;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-family: "Iowan Old Style", "Hiragino Mincho ProN", serif;
+}
+
+.modal-section {
+  margin-bottom: 14px;
+}
+
+.modal-label {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #b45309;
+}
+
+.format-row {
+  display: flex;
+  gap: 8px;
+}
+
+.format-chip {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid rgba(180, 83, 9, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 248, 235, 0.9);
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.format-chip.active {
+  background: #b45309;
+  border-color: #b45309;
+  color: #fffaf2;
+}
+
+.export-preview-count {
+  margin: 12px 0 14px;
+  font-size: 13px;
+  color: #7c5c3d;
+  text-align: center;
+}
+
+.export-preview-count strong {
+  color: #3f2f1f;
 }
 
 @media (max-width: 420px) {
