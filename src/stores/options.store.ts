@@ -9,6 +9,7 @@ export interface VocabEntry {
   pos: string
   meanings: string[]
   jlpt: string
+  jlpt_level?: string
   addedAt: number
   example: string
   exampleTrans: string

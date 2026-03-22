@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { VocabEntry } from "src/stores/options.store"
+import { JLPT_FILTER_OPTIONS, getEntryJlptLevel, matchesJlptFilter, type JlptFilterOption } from "src/utils/jlpt"
 
 const DAY_MS = 24 * 60 * 60 * 1000
+const JLPT_FILTER_STORAGE_KEY = "kakuyaku-popup-jlpt-filter"
 
 type ReviewMode = "list" | "review" | "done"
 
@@ -14,9 +16,15 @@ const reviewIndex = ref(0)
 const reviewedToday = ref(0)
 const knownCount = ref(0)
 const unknownCount = ref(0)
+const selectedJlptFilter = ref<JlptFilterOption>("All")
 
-const totalEntries = computed(() => vocabulary.value.length)
 const nowTimestamp = () => Date.now()
+
+const filteredVocabulary = computed(() =>
+  vocabulary.value.filter(entry => matchesJlptFilter(entry, selectedJlptFilter.value)),
+)
+
+const totalEntries = computed(() => filteredVocabulary.value.length)
 
 function getReviewCount(entry: VocabEntry) {
   return entry.review_count ?? entry.reviewCount ?? 0
@@ -35,7 +43,7 @@ function isDue(entry: VocabEntry) {
 }
 
 const dueEntries = computed(() =>
-  vocabulary.value
+  filteredVocabulary.value
     .filter(isDue)
     .slice()
     .sort((a, b) => getNextReview(a) - getNextReview(b)),
@@ -44,6 +52,10 @@ const dueEntries = computed(() =>
 const currentCard = computed<VocabEntry | null>(() =>
   reviewQueue.value[reviewIndex.value] ?? null,
 )
+
+function setJlptFilter(filter: JlptFilterOption) {
+  selectedJlptFilter.value = filter
+}
 
 function formatDate(timestamp?: number) {
   if (!timestamp)
@@ -136,6 +148,16 @@ function markUnknown() {
 function leaveReview() {
   reviewMode.value = "list"
 }
+
+onMounted(() => {
+  const storedFilter = localStorage.getItem(JLPT_FILTER_STORAGE_KEY)
+  if (storedFilter && JLPT_FILTER_OPTIONS.includes(storedFilter as JlptFilterOption))
+    selectedJlptFilter.value = storedFilter as JlptFilterOption
+})
+
+watch(selectedJlptFilter, (value) => {
+  localStorage.setItem(JLPT_FILTER_STORAGE_KEY, value)
+})
 </script>
 
 <template>
@@ -168,6 +190,30 @@ function leaveReview() {
           </div>
         </div>
 
+        <div class="filter-section">
+          <div class="filter-header">
+            <span class="filter-label">JLPT</span>
+            <span class="filter-value">{{ selectedJlptFilter }}</span>
+          </div>
+          <div
+            class="filter-chips"
+            role="radiogroup"
+            aria-label="JLPT level filter"
+          >
+            <button
+              v-for="option in JLPT_FILTER_OPTIONS"
+              :key="option"
+              class="filter-chip"
+              :class="{ active: selectedJlptFilter === option }"
+              type="button"
+              :aria-pressed="selectedJlptFilter === option"
+              @click="setJlptFilter(option)"
+            >
+              {{ option }}
+            </button>
+          </div>
+        </div>
+
         <button
           class="primary-button"
           type="button"
@@ -193,7 +239,15 @@ function leaveReview() {
             :key="entry.id"
           >
             <div>
-              <strong>{{ entry.surface }}</strong>
+              <div class="due-headline">
+                <strong>{{ entry.surface }}</strong>
+                <span
+                  v-if="getEntryJlptLevel(entry)"
+                  class="jlpt-badge"
+                >
+                  {{ getEntryJlptLevel(entry) }}
+                </span>
+              </div>
               <span v-if="entry.reading && entry.reading !== entry.surface">{{ entry.reading }}</span>
             </div>
             <small>复习 {{ getReviewCount(entry) }} 次</small>
@@ -287,6 +341,7 @@ function leaveReview() {
 .review-progress,
 .action-row,
 .summary-grid,
+.filter-header,
 .due-list li {
   display: flex;
   align-items: center;
@@ -294,6 +349,7 @@ function leaveReview() {
 
 .panel-header,
 .review-progress,
+.filter-header,
 .due-list li {
   justify-content: space-between;
 }
@@ -340,6 +396,49 @@ h1 {
 .summary-card {
   flex: 1;
   padding: 14px;
+}
+
+.filter-section {
+  margin-bottom: 16px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(120, 53, 15, 0.1);
+  background: rgba(255, 253, 248, 0.72);
+}
+
+.filter-header {
+  margin-bottom: 10px;
+}
+
+.filter-label,
+.filter-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: #9a3412;
+}
+
+.filter-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  border: 1px solid rgba(180, 83, 9, 0.18);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(255, 248, 235, 0.9);
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.filter-chip.active {
+  background: #b45309;
+  border-color: #b45309;
+  color: #fffaf2;
 }
 
 .summary-card span,
@@ -436,6 +535,12 @@ h1 {
   padding: 12px 14px;
 }
 
+.due-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .due-list strong {
   display: block;
   font-size: 17px;
@@ -445,6 +550,17 @@ h1 {
   display: block;
   margin-top: 2px;
   font-size: 13px;
+}
+
+.jlpt-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: rgba(236, 72, 153, 0.12);
+  color: #be185d;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .review-progress {
@@ -512,6 +628,10 @@ h1 {
 
   .dict-form {
     font-size: 36px;
+  }
+
+  .filter-chips {
+    gap: 6px;
   }
 }
 </style>
